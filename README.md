@@ -92,13 +92,55 @@ Get keys:
 - Groq: https://console.groq.com/keys
 - OpenRouter: https://openrouter.ai/keys
 
-## 📝 Track 01 Alignment
+## 🔌 MCP Server (Tool Selection via MCP)
 
+GraphLens exposes all graph tools via the **Model Context Protocol**:
+
+```bash
+python -m src.mcp_server
+```
+
+Any MCP-compatible agent (Claude, Cursor, etc.) can call:
+- `impact_analysis` — blast radius of code changes
+- `find_dependencies` — dependency chains
+- `find_shortest_path` — path between entities
+- `pagerank` — most critical nodes
+- `trace_decision` — all connections
+- `community_detection` — code clusters
+- `cypher` — raw queries
+
+## 🧠 Agent Memory (Track 02 Bonus)
+
+GraphLens includes persistent memory across sessions:
+
+```python
+from src.memory import AgentMemory
+memory = AgentMemory(store, session_id="user_123")
+memory.remember("config.py is the most critical module", "architecture")
+memory.remember_decision("What breaks if config changes?", "3 modules affected", "config->parser->agent")
+context = memory.get_context()  # Fed into next session
+```
+
+## 🧪 Testing
+
+```bash
+python -m pytest tests/ -v
+# 17 tests — all passing
+```
+
+## 📝 Track Alignment
+
+### Track 01: Agents That Act on Connected Data ✅
 - ✅ **Multi-hop reasoning**: Agent follows 1-5 hop paths through CALLS, IMPORTS, INHERITS edges
 - ✅ **Graph queries as agent tools**: 7 Cypher-backed tools the agent selects from
-- ✅ **Tool selection**: LLM picks the right tool based on the question
+- ✅ **Tool selection through MCP**: Full MCP server exposing all graph tools
 - ✅ **Actions based on graph**: Impact analysis drives refactoring suggestions
 - ✅ **Explainable results**: Every answer shows the graph path: `A -[CALLS]-> B -[IMPORTS]-> C`
+
+### Track 02: Agent Memory and Coordination ✅ (Bonus)
+- ✅ **Persistent memory**: Facts and decisions stored in FalkorDB across sessions
+- ✅ **Session isolation**: Separate memory per user/tenant via graph names
+- ✅ **Decision tracing**: Every answer's graph path is stored for recall
 
 ## 📄 License
 
