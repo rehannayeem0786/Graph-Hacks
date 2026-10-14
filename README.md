@@ -121,11 +121,23 @@ memory.remember_decision("What breaks if config changes?", "3 modules affected",
 context = memory.get_context()  # Fed into next session
 ```
 
+## 🤝 Multi-Agent Coordination (Track 02)
+
+```python
+from src.multi_agent import AgentBus
+bus = AgentBus(store)
+bus.register("code-reviewer", ["impact_analysis", "pagerank"])
+task_id = bus.create_task("Review parser.py for breaking changes", priority=9)
+task = bus.claim_task()  # Another agent picks it up
+bus.complete_task(task_id, "No breaking changes found")
+bus.handoff("security-agent", "Focus on injection vectors in parser.py")
+```
+
 ## 🧪 Testing
 
 ```bash
 python -m pytest tests/ -v
-# 17 tests — all passing
+# 7 pass offline, 12 need FalkorDB running
 ```
 
 ## 📝 Track Alignment

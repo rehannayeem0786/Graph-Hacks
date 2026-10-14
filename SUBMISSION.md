@@ -40,7 +40,9 @@ Codebase → AST Parser → FalkorDB Graph → AI Agent → Explained Answers
 |---|---|
 | Episodic/semantic memory | `AgentMemory` stores facts, decisions, reasoning paths in FalkorDB |
 | Persistent history | Memory survives across sessions via graph persistence |
-| Shared state | Multiple agents can share the same FalkorDB graph |
+| Shared state | `AgentBus` — task queue, handoffs, shared graph state |
+| Handoffs between agents | `bus.handoff(target, context)` passes reasoning to next agent |
+| High-concurrency R/W | All coordination via atomic Cypher MERGE/MATCH in FalkorDB |
 | Per-user isolation | Separate graph names per user/tenant |
 
 ## 🏗️ Architecture
@@ -95,17 +97,20 @@ python -m src.cli serve
 │   ├── agent.py           # AI agent with tool-calling loop
 │   ├── mcp_server.py      # MCP tool selection server
 │   ├── memory.py          # Persistent agent memory (Track 02)
+│   ├── multi_agent.py     # Multi-agent coordination bus (Track 02)
 │   ├── visualization.py   # D3.js + ASCII visualizations
 │   ├── server.py          # FastAPI REST API
 │   ├── cli.py             # CLI interface
 │   └── config.py          # Configuration
 ├── static/
-│   └── index.html         # D3.js interactive graph UI
-├── tests/                 # 17 tests
+│   ├── index.html         # D3.js interactive graph UI
+│   └── app.js             # Frontend logic
+├── tests/                 # 19 tests (7 pass offline, 12 need FalkorDB)
 ├── demo.py                # Full demo script
 ├── docker-compose.yml     # One-command deployment
 ├── Dockerfile             # Container build
-└── setup.ps1              # Windows setup automation
+├── setup.ps1              # Windows setup automation
+└── .github/workflows/     # CI with FalkorDB service container
 ```
 
 ## 🎬 Demo Flow (for video)
