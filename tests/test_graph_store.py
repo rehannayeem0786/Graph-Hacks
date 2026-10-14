@@ -55,7 +55,7 @@ def test_pagerank(store):
 @requires_falkordb
 def test_impact_analysis(store):
     """Impact analysis should find downstream dependencies."""
-    results = store.impact_analysis("config")
+    results = store.impact_analysis("config.py")
     assert len(results) > 0
 
 

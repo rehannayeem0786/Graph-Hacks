@@ -41,9 +41,8 @@ class GraphLensAgent:
 
         for _ in range(5):
             raw = self._llm_chat(messages)
-            try:
-                parsed = json.loads(raw)
-            except json.JSONDecodeError:
+            parsed = self._parse_json(raw)
+            if parsed is None:
                 self.history.append({"role": "assistant", "content": raw})
                 return raw
 
@@ -61,6 +60,49 @@ class GraphLensAgent:
                 continue
 
         return "Agent reached maximum reasoning steps."
+
+    @staticmethod
+    def _parse_json(text: str) -> dict | None:
+        """Extract a JSON object from LLM output (handles markdown fences, extra text)."""
+        text = text.strip()
+        # Direct parse
+        try:
+            result = json.loads(text)
+            if isinstance(result, dict):
+                return result
+        except json.JSONDecodeError:
+            pass
+        # Strip markdown code fences: ```json ... ``` or ``` ... ```
+        if "```" in text:
+            lines = text.split("\n")
+            inside = []
+            in_block = False
+            for line in lines:
+                if line.strip().startswith("```"):
+                    if in_block:
+                        break
+                    in_block = True
+                    continue
+                if in_block:
+                    inside.append(line)
+            if inside:
+                try:
+                    result = json.loads("\n".join(inside))
+                    if isinstance(result, dict):
+                        return result
+                except json.JSONDecodeError:
+                    pass
+        # Find first { ... } substring
+        start = text.find("{")
+        end = text.rfind("}")
+        if start >= 0 and end > start:
+            try:
+                result = json.loads(text[start:end + 1])
+                if isinstance(result, dict):
+                    return result
+            except json.JSONDecodeError:
+                pass
+        return None
 
     def _execute_tool(self, tool_name: str, args: dict) -> str:
         """Execute a graph tool and return results as string."""
@@ -106,7 +148,7 @@ class GraphLensAgent:
             resp = httpx.post(
                 "https://api.groq.com/openai/v1/chat/completions",
                 headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
-                json={"model": GROQ_MODEL, "messages": messages, "temperature": 0.1},
+                json={"model": GROQ_MODEL, "messages": messages, "temperature": 0.1, "max_tokens": 2048},
                 timeout=60.0,
             )
             resp.raise_for_status()
@@ -125,7 +167,7 @@ class GraphLensAgent:
                     "HTTP-Referer": "https://github.com/graphlens",
                     "X-Title": "GraphLens",
                 },
-                json={"model": OPENROUTER_MODEL, "messages": messages, "temperature": 0.1},
+                json={"model": OPENROUTER_MODEL, "messages": messages, "temperature": 0.1, "max_tokens": 2048},
                 timeout=90.0,
             )
             resp.raise_for_status()

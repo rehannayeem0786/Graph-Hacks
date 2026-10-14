@@ -138,12 +138,12 @@ class GraphStore:
         """Find the most important nodes via degree centrality."""
         cypher = f"""
         MATCH (n)
-        WHERE n.type IN ['Class', 'Function', 'Method', 'Module']
+        WHERE any(l IN labels(n) WHERE l IN ['Class', 'Function', 'Method', 'Module'])
         OPTIONAL MATCH (n)<-[r]-(other)
         WITH n, count(r) AS in_degree
         OPTIONAL MATCH (n)-[r2]->(other2)
         WITH n, in_degree, count(r2) AS out_degree
-        RETURN n.name AS name, n.type AS type, n.file AS file,
+        RETURN n.name AS name, labels(n)[0] AS type, n.file AS file,
                in_degree, out_degree,
                (in_degree * 2 + out_degree) AS importance_score
         ORDER BY importance_score DESC
