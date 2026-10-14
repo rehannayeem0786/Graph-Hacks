@@ -7,6 +7,7 @@ Usage:
   python -m src.cli stats             Show graph statistics
   python -m src.cli serve             Start the FastAPI server + D3.js UI
   python -m src.cli viz               Show ASCII graph visualization
+  python -m src.cli agents            Show multi-agent coordination state
 """
 
 import sys
@@ -82,6 +83,25 @@ def cmd_viz():
     console.print(ascii_graph_stats(store))
 
 
+def cmd_agents():
+    """Show multi-agent coordination state."""
+    from src.multi_agent import AgentBus
+    store = GraphStore()
+    bus = AgentBus(store)
+    state = bus.get_shared_state()
+    agents = bus.list_agents()
+    console.print(Panel(
+        f"🤖 Multi-Agent State\n"
+        f"   Active Agents: {state['active_agents']}\n"
+        f"   Tasks: {state['tasks_by_status']}\n"
+        f"   Pending Handoffs: {state['pending_handoffs']}",
+        border_style="cyan",
+    ))
+    if agents:
+        for a in agents:
+            console.print(f"   • {a[1]} ({a[0]})")
+
+
 def main():
     if len(sys.argv) < 2:
         console.print("[bold red]Usage:[/] python -m src.cli <ingest|ask|stats|serve> [args]")
@@ -100,6 +120,8 @@ def main():
         cmd_serve()
     elif cmd == "viz":
         cmd_viz()
+    elif cmd == "agents":
+        cmd_agents()
     else:
         console.print(f"[red]Unknown command: {cmd}[/]")
         sys.exit(1)
