@@ -5,7 +5,8 @@ Usage:
   python -m src.cli ingest <path>     Parse a codebase into FalkorDB
   python -m src.cli ask "question"    Ask the agent a question
   python -m src.cli stats             Show graph statistics
-  python -m src.cli serve             Start the FastAPI server
+  python -m src.cli serve             Start the FastAPI server + D3.js UI
+  python -m src.cli viz               Show ASCII graph visualization
 """
 
 import sys
@@ -62,11 +63,23 @@ def cmd_stats():
 
 
 def cmd_serve():
-    """Start the FastAPI server."""
+    """Start the FastAPI server with the D3.js visualization UI."""
     import uvicorn
     from src.server import app
-    console.print(Panel("🚀 Starting GraphLens API server on http://localhost:8000", border_style="green"))
+    console.print(Panel(
+        "🚀 Starting GraphLens API server\n"
+        "   Dashboard: http://localhost:8000\n"
+        "   API Docs:  http://localhost:8000/docs",
+        border_style="green",
+    ))
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+
+def cmd_viz():
+    """Show ASCII visualization of the graph."""
+    from src.visualization import ascii_graph_stats
+    store = GraphStore()
+    console.print(ascii_graph_stats(store))
 
 
 def main():
@@ -85,6 +98,8 @@ def main():
         cmd_stats()
     elif cmd == "serve":
         cmd_serve()
+    elif cmd == "viz":
+        cmd_viz()
     else:
         console.print(f"[red]Unknown command: {cmd}[/]")
         sys.exit(1)

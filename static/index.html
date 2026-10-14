@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GraphLens — AI Code Intelligence</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0d1117; color: #c9d1d9; min-height: 100vh; }
+        .header { background: #161b22; border-bottom: 1px solid #30363d; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+        .header h1 { color: #58a6ff; font-size: 1.4rem; }
+        .header .badge { background: #238636; color: white; padding: 4px 12px; border-radius: 12px; font-size: 0.8rem; }
+        .container { display: flex; height: calc(100vh - 60px); }
+        .sidebar { width: 350px; background: #161b22; border-right: 1px solid #30363d; padding: 16px; overflow-y: auto; }
+        .main { flex: 1; position: relative; }
+        .panel { background: #21262d; border: 1px solid #30363d; border-radius: 8px; padding: 12px; margin-bottom: 12px; }
+        .panel h3 { color: #58a6ff; margin-bottom: 8px; font-size: 0.9rem; }
+        input, textarea, select, button { width: 100%; padding: 8px 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.85rem; margin-bottom: 8px; }
+        button { background: #238636; border: none; cursor: pointer; font-weight: 600; transition: background 0.2s; }
+        button:hover { background: #2ea043; }
+        button.secondary { background: #21262d; border: 1px solid #30363d; }
+        #graph-container { width: 100%; height: 100%; }
+        #graph-container svg { width: 100%; height: 100%; }
+        .node circle { stroke: #fff; stroke-width: 1.5px; }
+        .node text { font-size: 9px; fill: #c9d1d9; }
+        .link { stroke: #30363d; stroke-opacity: 0.6; }
+        #answer-box { background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 12px; min-height: 80px; font-size: 0.85rem; white-space: pre-wrap; max-height: 200px; overflow-y: auto; }
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .stat-item { text-align: center; }
+        .stat-item .value { font-size: 1.5rem; color: #58a6ff; font-weight: bold; }
+        .stat-item .label { font-size: 0.7rem; color: #8b949e; }
+        .loading { color: #d29922; font-style: italic; }
+        .error { color: #f85149; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔍 GraphLens — AI Code Intelligence</h1>
+        <span class="badge">Graph Hacks 2026</span>
+    </div>
+    <div class="container">
+        <div class="sidebar">
+            <div class="panel">
+                <h3>📊 Graph Stats</h3>
+                <div class="stats-grid">
+                    <div class="stat-item"><div class="value" id="stat-nodes">—</div><div class="label">Nodes</div></div>
+                    <div class="stat-item"><div class="value" id="stat-edges">—</div><div class="label">Edges</div></div>
+                </div>
+            </div>
+            <div class="panel">
+                <h3>🤖 Ask the Agent</h3>
+                <textarea id="question" rows="3" placeholder="What is the most critical module?">What is the most critical module?</textarea>
+                <button onclick="askAgent()">Ask GraphLens</button>
+                <div id="answer-box">Answer will appear here...</div>
+            </div>
+            <div class="panel">
+                <h3>💥 Impact Analysis</h3>
+                <input id="impact-name" placeholder="Entity name" value="config">
+                <select id="impact-direction">
+                    <option value="downstream">Downstream (what breaks)</option>
+                    <option value="upstream">Upstream (what depends)</option>
+                </select>
+                <button onclick="runImpact()">Analyze Impact</button>
+                <div id="impact-result" style="font-size:0.8rem;max-height:120px;overflow-y:auto;"></div>
+            </div>
+            <div class="panel">
+                <h3>🔗 Shortest Path</h3>
+                <input id="path-source" placeholder="Source" value="parse_codebase">
+                <input id="path-target" placeholder="Target" value="GraphStore">
+                <button onclick="findPath()">Find Path</button>
+                <div id="path-result" style="font-size:0.8rem;max-height:80px;overflow-y:auto;"></div>
+            </div>
+            <div class="panel">
+                <h3>🏆 PageRank</h3>
+                <button onclick="runPageRank()">Run PageRank</button>
+                <div id="pagerank-result" style="font-size:0.8rem;max-height:120px;overflow-y:auto;"></div>
+            </div>
+        </div>
+        <div class="main"><div id="graph-container"></div></div>
+    </div>
+    <script src="/static/app.js"></script>
+</body>
+</html>

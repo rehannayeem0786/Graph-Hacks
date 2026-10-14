@@ -13,9 +13,12 @@ Endpoints:
   GET  /graph/pagerank  — top nodes by importance
 """
 
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from src.parser import parse_codebase
@@ -33,6 +36,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Serve static files (D3.js visualization UI)
+_static_dir = Path(__file__).parent.parent / "static"
+if _static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
 
 
 class IngestRequest(BaseModel):
@@ -112,38 +120,8 @@ def graph_pagerank(limit: int = 10):
 
 @app.get("/", response_class=HTMLResponse)
 def dashboard():
-    """Simple dashboard page."""
-    return """
-    <!DOCTYPE html>
-    <html>
-    <head><title>GraphLens</title>
-    <style>
-        body { font-family: 'Segoe UI', sans-serif; background: #0d1117; color: #c9d1d9; padding: 40px; }
-        h1 { color: #58a6ff; }
-        .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin: 10px 0; }
-        a { color: #58a6ff; }
-        code { background: #21262d; padding: 2px 6px; border-radius: 4px; }
-    </style>
-    </head>
-    <body>
-        <h1>🔍 GraphLens — AI Code Intelligence</h1>
-        <div class="card">
-            <h3>API Endpoints</h3>
-            <ul>
-                <li><code>POST /ingest</code> — Parse codebase into graph</li>
-                <li><code>POST /ask</code> — Ask the AI agent</li>
-                <li><code>GET /stats</code> — Graph statistics</li>
-                <li><code>GET /graph</code> — D3.js graph data</li>
-                <li><code>GET /graph/path?source=X&target=Y</code> — Path visualization</li>
-                <li><code>GET /graph/impact?name=X</code> — Impact analysis</li>
-                <li><code>GET /graph/communities</code> — Code clusters</li>
-                <li><code>GET /graph/pagerank</code> — Most critical nodes</li>
-            </ul>
-        </div>
-        <div class="card">
-            <h3>Quick Test</h3>
-            <p>Try: <code>curl -X POST http://localhost:8000/ask -H "Content-Type: application/json" -d '{"question":"What is the most critical module?"}'</code></p>
-        </div>
-    </body>
-    </html>
-    """
+    """Serve the D3.js visualization dashboard."""
+    index_path = _static_dir / "index.html"
+    if index_path.exists():
+        return index_path.read_text(encoding="utf-8")
+    return "<h1>GraphLens API</h1><p>Visit /docs for API documentation.</p>"
