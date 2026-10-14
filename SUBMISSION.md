@@ -129,6 +129,16 @@ python -m src.cli serve
 4. **Memory in the graph** — Agent remembers across sessions
 5. **Interactive visualization** — D3.js force-directed graph
 
+## ✅ Live Verification Results
+
+- **Ingestion:** 465 nodes, 453 edges from `./src` into FalkorDB
+- **Tests:** 19/19 passing (`pytest tests/ -v`)
+- **Agent query:** `"What is the most critical module?"` → correctly identifies `parse_python_file` via PageRank with graph path explanation
+- **Memory:** `AgentMemory.remember()`/`recall()` verified against live FalkorDB
+- **Multi-agent:** `AgentBus` register → create_task → claim_task verified
+- **MCP:** `tools/list` returns all 7 graph tools via JSON-RPC
+- **Visualization:** D3.js JSON generation returns 200 nodes + 200 edges
+
 ---
 
 *Built for Graph Hacks 2026 | Powered by FalkorDB*
