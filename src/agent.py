@@ -102,25 +102,35 @@ class GraphLensAgent:
         raise ValueError(f"Unknown LLM_PROVIDER: {LLM_PROVIDER}. Use 'groq' or 'openrouter'.")
 
     def _groq_chat(self, messages: list[dict]) -> str:
-        resp = httpx.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
-            json={"model": GROQ_MODEL, "messages": messages, "temperature": 0.1},
-            timeout=60.0,
-        )
-        resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"]
+        try:
+            resp = httpx.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
+                json={"model": GROQ_MODEL, "messages": messages, "temperature": 0.1},
+                timeout=60.0,
+            )
+            resp.raise_for_status()
+            return resp.json()["choices"][0]["message"]["content"]
+        except httpx.HTTPStatusError as e:
+            return json.dumps({"error": f"Groq API error {e.response.status_code}: {e.response.text[:200]}"})
+        except httpx.RequestError as e:
+            return json.dumps({"error": f"Groq connection error: {str(e)}"})
 
     def _openrouter_chat(self, messages: list[dict]) -> str:
-        resp = httpx.post(
-            f"{OPENROUTER_BASE_URL}/chat/completions",
-            headers={
-                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                "HTTP-Referer": "https://github.com/graphlens",
-                "X-Title": "GraphLens",
-            },
-            json={"model": OPENROUTER_MODEL, "messages": messages, "temperature": 0.1},
-            timeout=90.0,
-        )
-        resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"]
+        try:
+            resp = httpx.post(
+                f"{OPENROUTER_BASE_URL}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                    "HTTP-Referer": "https://github.com/graphlens",
+                    "X-Title": "GraphLens",
+                },
+                json={"model": OPENROUTER_MODEL, "messages": messages, "temperature": 0.1},
+                timeout=90.0,
+            )
+            resp.raise_for_status()
+            return resp.json()["choices"][0]["message"]["content"]
+        except httpx.HTTPStatusError as e:
+            return json.dumps({"error": f"OpenRouter API error {e.response.status_code}: {e.response.text[:200]}"})
+        except httpx.RequestError as e:
+            return json.dumps({"error": f"OpenRouter connection error: {str(e)}"})

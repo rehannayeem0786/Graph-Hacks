@@ -14,10 +14,12 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.1-70b-instruct")
 OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
 
-# FalkorDB settings
+# FalkorDB settings (supports local Docker AND FalkorDB Cloud)
 FALKORDB_HOST = os.getenv("FALKORDB_HOST", "localhost")
 FALKORDB_PORT = int(os.getenv("FALKORDB_PORT", "6379"))
 FALKORDB_GRAPH_NAME = os.getenv("FALKORDB_GRAPH_NAME", "graphlens")
+FALKORDB_PASSWORD = os.getenv("FALKORDB_PASSWORD", "")
+FALKORDB_SSL = os.getenv("FALKORDB_SSL", "false").lower() in ("true", "1", "yes")
 
 # Supported file extensions for parsing
 SUPPORTED_EXTENSIONS = {

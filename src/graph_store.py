@@ -9,18 +9,32 @@ Stores the parsed code graph in FalkorDB and provides:
 
 from falkordb import FalkorDB
 
-from src.config import FALKORDB_HOST, FALKORDB_PORT, FALKORDB_GRAPH_NAME
+from src.config import (
+    FALKORDB_HOST, FALKORDB_PORT, FALKORDB_GRAPH_NAME,
+    FALKORDB_PASSWORD, FALKORDB_SSL,
+)
 from src.parser import ParseResult
 
 
 class GraphStore:
     """Manages the FalkorDB graph for code intelligence."""
 
-    def __init__(self, host: str = None, port: int = None, graph_name: str = None):
+    def __init__(self, host: str = None, port: int = None, graph_name: str = None,
+                 password: str = None, ssl: bool = None):
         self.host = host or FALKORDB_HOST
         self.port = port or FALKORDB_PORT
         self.graph_name = graph_name or FALKORDB_GRAPH_NAME
-        self.client = FalkorDB(host=self.host, port=self.port)
+        self.password = password if password is not None else FALKORDB_PASSWORD
+        self.ssl = ssl if ssl is not None else FALKORDB_SSL
+
+        connect_kwargs = {"host": self.host, "port": self.port}
+        if self.password:
+            connect_kwargs["password"] = self.password
+        if self.ssl:
+            connect_kwargs["ssl"] = True
+            connect_kwargs["ssl_cert_reqs"] = None
+
+        self.client = FalkorDB(**connect_kwargs)
         self.graph = self.client.select_graph(self.graph_name)
 
     def ingest(self, parse_result: ParseResult) -> dict:
