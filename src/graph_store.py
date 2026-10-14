@@ -1,0 +1,175 @@
+"""
+FalkorDB Graph Store — the context layer for GraphLens.
+
+Stores the parsed code graph in FalkorDB and provides:
+- Cypher queries for the agent
+- Graph algorithm tools (PageRank, shortest path, centrality)
+- Multi-hop traversal for impact analysis
+"""
+
+from falkordb import FalkorDB
+
+from src.config import FALKORDB_HOST, FALKORDB_PORT, FALKORDB_GRAPH_NAME
+from src.parser import ParseResult
+
+
+class GraphStore:
+    """Manages the FalkorDB graph for code intelligence."""
+
+    def __init__(self, host: str = None, port: int = None, graph_name: str = None):
+        self.host = host or FALKORDB_HOST
+        self.port = port or FALKORDB_PORT
+        self.graph_name = graph_name or FALKORDB_GRAPH_NAME
+        self.client = FalkorDB(host=self.host, port=self.port)
+        self.graph = self.client.select_graph(self.graph_name)
+
+    def ingest(self, parse_result: ParseResult) -> dict:
+        """Ingest parsed code graph into FalkorDB."""
+        stats = {"nodes_created": 0, "edges_created": 0}
+        for node in parse_result.nodes:
+            d = node.to_dict()
+            node_type = d.pop("type", "Node")
+            props = ", ".join(
+                f"{k}: ${k}" for k in d if d[k] is not None and d[k] != ""
+            )
+            query = f"MERGE (n:{node_type} {{id: $id}}) SET n += {{{props}}}"
+            try:
+                self.graph.query(query, d)
+                stats["nodes_created"] += 1
+            except Exception:
+                pass
+        for edge in parse_result.edges:
+            d = edge.to_dict()
+            edge_type = d.pop("type", "RELATES_TO")
+            query = (
+                f"MATCH (a {{id: $source}}), (b {{id: $target}}) "
+                f"MERGE (a)-[r:{edge_type} {{line: $line}}]->(b)"
+            )
+            try:
+                self.graph.query(query, d)
+                stats["edges_created"] += 1
+            except Exception:
+                pass
+        return stats
+
+    def query(self, cypher: str, params: dict = None) -> list:
+        """Execute a raw Cypher query."""
+        result = self.graph.query(cypher, params or {})
+        return result.result_set
+
+    def find_dependencies(self, module_name: str, depth: int = 3) -> list:
+        """Find all dependencies of a module up to N hops."""
+        cypher = f"""
+        MATCH path = (m)-[:IMPORTS*1..{depth}]->(dep)
+        WHERE m.name = $name
+        RETURN m.name AS source, [n IN nodes(path) | n.name] AS chain,
+               length(path) AS hops
+        ORDER BY hops
+        """
+        return self.query(cypher, {"name": module_name})
+
+    def impact_analysis(self, node_name: str, direction: str = "downstream") -> list:
+        """Multi-hop impact analysis: what breaks if this changes?"""
+        if direction == "downstream":
+            cypher = """
+            MATCH path = (n)-[:CALLS|IMPORTS|USES*1..5]->(affected)
+            WHERE n.name = $name
+            RETURN DISTINCT affected.name AS affected_node,
+                   affected.file AS file,
+                   length(path) AS impact_distance,
+                   [r IN relationships(path) | type(r)] AS path_types
+            ORDER BY impact_distance
+            """
+        else:
+            cypher = """
+            MATCH path = (affected)-[:CALLS|IMPORTS|USES*1..5]->(n)
+            WHERE n.name = $name
+            RETURN DISTINCT affected.name AS affected_by,
+                   affected.file AS file,
+                   length(path) AS distance,
+                   [r IN relationships(path) | type(r)] AS path_types
+            ORDER BY distance
+            """
+        return self.query(cypher, {"name": node_name})
+
+    def get_graph_stats(self) -> dict:
+        """Get overview statistics of the code graph."""
+        node_count = self.query("MATCH (n) RETURN count(n)")[0][0]
+        edge_count = self.query("MATCH ()-[r]->() RETURN count(r)")[0][0]
+        node_types = self.query(
+            "MATCH (n) RETURN DISTINCT labels(n)[0] AS type, count(n) AS cnt ORDER BY cnt DESC"
+        )
+        edge_types = self.query(
+            "MATCH ()-[r]->() RETURN DISTINCT type(r) AS type, count(r) AS cnt ORDER BY cnt DESC"
+        )
+        return {
+            "total_nodes": node_count,
+            "total_edges": edge_count,
+            "node_types": {row[0]: row[1] for row in node_types},
+            "edge_types": {row[0]: row[1] for row in edge_types},
+        }
+
+    def find_shortest_path(self, source_name: str, target_name: str) -> list:
+        """Find the shortest path between two nodes."""
+        cypher = """
+        MATCH path = shortestPath((a)-[*..10]-(b))
+        WHERE a.name = $source AND b.name = $target
+        RETURN [n IN nodes(path) | n.name] AS path_nodes,
+               [r IN relationships(path) | type(r)] AS path_edges,
+               length(path) AS path_length
+        """
+        return self.query(cypher, {"source": source_name, "target": target_name})
+
+    def pagerank(self, limit: int = 10) -> list:
+        """Find the most important nodes via degree centrality."""
+        cypher = f"""
+        MATCH (n)
+        WHERE n.type IN ['Class', 'Function', 'Method', 'Module']
+        OPTIONAL MATCH (n)<-[r]-(other)
+        WITH n, count(r) AS in_degree
+        OPTIONAL MATCH (n)-[r2]->(other2)
+        WITH n, in_degree, count(r2) AS out_degree
+        RETURN n.name AS name, n.type AS type, n.file AS file,
+               in_degree, out_degree,
+               (in_degree * 2 + out_degree) AS importance_score
+        ORDER BY importance_score DESC
+        LIMIT {limit}
+        """
+        return self.query(cypher)
+
+    def community_detection(self) -> list:
+        """Detect communities/clusters in the code graph."""
+        cypher = """
+        MATCH (n)-[r]-(m)
+        WHERE n.file = m.file AND n.file <> ''
+        RETURN n.file AS file, count(DISTINCT n) AS node_count,
+               count(r) AS edge_count
+        ORDER BY node_count DESC
+        """
+        return self.query(cypher)
+
+    def trace_decision(self, entity_name: str) -> list:
+        """Trace all connections to/from an entity."""
+        cypher = """
+        MATCH path = (n)-[*1..4]-(connected)
+        WHERE n.name = $name
+        RETURN DISTINCT connected.name AS connected_to,
+               connected.type AS type,
+               [r IN relationships(path) | type(r)] AS via,
+               length(path) AS distance
+        ORDER BY distance
+        LIMIT 50
+        """
+        return self.query(cypher, {"name": entity_name})
+
+    def clear(self):
+        """Clear the entire graph."""
+        self.graph.query("MATCH (n) DETACH DELETE n")
+
+    def get_schema(self) -> str:
+        """Get the graph schema description."""
+        node_labels = self.query("MATCH (n) RETURN DISTINCT labels(n)[0] AS label")
+        rel_types = self.query("MATCH ()-[r]->() RETURN DISTINCT type(r) AS type")
+        labels = [r[0] for r in node_labels if r[0]]
+        types = [r[0] for r in rel_types if r[0]]
+        return f"Node labels: {labels}\nRelationship types: {types}"
