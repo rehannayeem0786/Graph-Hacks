@@ -1,84 +1,140 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GraphLens — AI Code Intelligence</title>
-    <script src="https://d3js.org/d3.v7.min.js"></script>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0d1117; color: #c9d1d9; min-height: 100vh; }
-        .header { background: #161b22; border-bottom: 1px solid #30363d; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
-        .header h1 { color: #58a6ff; font-size: 1.4rem; }
-        .header .badge { background: #238636; color: white; padding: 4px 12px; border-radius: 12px; font-size: 0.8rem; }
-        .container { display: flex; height: calc(100vh - 60px); }
-        .sidebar { width: 350px; background: #161b22; border-right: 1px solid #30363d; padding: 16px; overflow-y: auto; }
-        .main { flex: 1; position: relative; }
-        .panel { background: #21262d; border: 1px solid #30363d; border-radius: 8px; padding: 12px; margin-bottom: 12px; }
-        .panel h3 { color: #58a6ff; margin-bottom: 8px; font-size: 0.9rem; }
-        input, textarea, select, button { width: 100%; padding: 8px 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.85rem; margin-bottom: 8px; }
-        button { background: #238636; border: none; cursor: pointer; font-weight: 600; transition: background 0.2s; }
-        button:hover { background: #2ea043; }
-        button.secondary { background: #21262d; border: 1px solid #30363d; }
-        #graph-container { width: 100%; height: 100%; }
-        #graph-container svg { width: 100%; height: 100%; }
-        .node circle { stroke: #fff; stroke-width: 1.5px; }
-        .node text { font-size: 9px; fill: #c9d1d9; }
-        .link { stroke: #30363d; stroke-opacity: 0.6; }
-        #answer-box { background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 12px; min-height: 80px; font-size: 0.85rem; white-space: pre-wrap; max-height: 200px; overflow-y: auto; }
-        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-        .stat-item { text-align: center; }
-        .stat-item .value { font-size: 1.5rem; color: #58a6ff; font-weight: bold; }
-        .stat-item .label { font-size: 0.7rem; color: #8b949e; }
-        .loading { color: #d29922; font-style: italic; }
-        .error { color: #f85149; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>GraphLens — AI Code Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+:root{--bg:#0a0e1a;--bg2:#0f1629;--card:rgba(15,23,42,.6);--card-h:rgba(30,41,59,.7);--bdr:rgba(99,102,241,.15);--bdr-h:rgba(99,102,241,.4);--txt:#f1f5f9;--txt2:#94a3b8;--txt3:#64748b;--a1:#6366f1;--a2:#8b5cf6;--a3:#06b6d4;--a4:#10b981;--danger:#ef4444;--r:12px;--rs:8px}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;overflow:hidden}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse at 20% 50%,rgba(99,102,241,.08) 0%,transparent 50%),radial-gradient(ellipse at 80% 20%,rgba(139,92,246,.06) 0%,transparent 50%);pointer-events:none;z-index:0}
+.header{position:relative;z-index:10;display:flex;align-items:center;justify-content:space-between;padding:14px 24px;background:rgba(15,23,42,.8);backdrop-filter:blur(20px);border-bottom:1px solid var(--bdr)}
+.header-left{display:flex;align-items:center;gap:12px}
+.logo{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;background:linear-gradient(135deg,var(--a1),var(--a2));box-shadow:0 0 20px rgba(99,102,241,.3)}
+.header h1{font-size:1.2rem;font-weight:800;background:linear-gradient(135deg,#fff,var(--a3));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.header-sub{font-size:.68rem;color:var(--txt3);font-weight:500}
+.header-right{display:flex;align-items:center;gap:10px}
+.pill{padding:4px 12px;border-radius:20px;font-size:.7rem;font-weight:600;border:1px solid var(--bdr);background:var(--card)}
+.pill-live{border-color:rgba(16,185,129,.3);color:var(--a4)}
+.pill-live::before{content:'';display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--a4);margin-right:6px;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.pill-hack{border-color:rgba(139,92,246,.3);color:var(--a2)}
+.container{position:relative;z-index:1;display:flex;height:calc(100vh - 61px)}
+.sidebar{width:380px;background:rgba(15,23,42,.5);backdrop-filter:blur(10px);border-right:1px solid var(--bdr);display:flex;flex-direction:column;overflow:hidden}
+.tabs{display:flex;padding:12px 16px 0;gap:4px}
+.tab{flex:1;padding:8px 4px;text-align:center;font-size:.72rem;font-weight:600;color:var(--txt3);cursor:pointer;border-radius:var(--rs) var(--rs) 0 0;transition:all .2s;border:1px solid transparent;border-bottom:none}
+.tab:hover{color:var(--txt2);background:rgba(99,102,241,.05)}
+.tab.active{color:var(--a1);background:var(--card);border-color:var(--bdr)}
+.tab-content{flex:1;overflow-y:auto;padding:16px}
+.tab-panel{display:none}.tab-panel.active{display:block}
+.card{background:var(--card);border:1px solid var(--bdr);border-radius:var(--r);padding:16px;margin-bottom:14px;transition:all .3s}
+.card:hover{border-color:var(--bdr-h);box-shadow:0 4px 24px rgba(0,0,0,.4)}
+.card-title{font-size:.78rem;font-weight:700;color:var(--txt);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+label{display:block;font-size:.68rem;font-weight:600;color:var(--txt2);margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px}
+input,textarea,select{width:100%;padding:9px 12px;background:rgba(10,14,26,.8);border:1px solid var(--bdr);border-radius:var(--rs);color:var(--txt);font-size:.82rem;font-family:'Inter',sans-serif;transition:all .2s;outline:none;margin-bottom:10px}
+input:focus,textarea:focus,select:focus{border-color:var(--a1);box-shadow:0 0 0 3px rgba(99,102,241,.1)}
+textarea{resize:vertical;min-height:64px}
+select{appearance:none;cursor:pointer}
+.btn{width:100%;padding:10px;border:none;border-radius:var(--rs);font-size:.82rem;font-weight:600;cursor:pointer;transition:all .2s;font-family:'Inter',sans-serif;display:flex;align-items:center;justify-content:center;gap:6px}
+.btn-primary{background:linear-gradient(135deg,var(--a1),var(--a2));color:#fff;box-shadow:0 2px 12px rgba(99,102,241,.3)}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 4px 20px rgba(99,102,241,.4)}
+.btn-secondary{background:var(--card);border:1px solid var(--bdr);color:var(--txt2)}
+.btn-secondary:hover{border-color:var(--bdr-h);color:var(--txt)}
+.btn:active{transform:scale(.98)}
+.result-box{background:rgba(10,14,26,.6);border:1px solid var(--bdr);border-radius:var(--rs);padding:12px;font-size:.8rem;line-height:1.6;max-height:180px;overflow-y:auto;margin-top:10px;font-family:'JetBrains Mono',monospace;white-space:pre-wrap;color:var(--txt2)}
+.result-box::-webkit-scrollbar{width:4px}
+.result-box::-webkit-scrollbar-thumb{background:var(--bdr);border-radius:2px}
+.stats-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.stat-card{background:var(--card);border:1px solid var(--bdr);border-radius:var(--r);padding:14px;text-align:center;transition:all .3s}
+.stat-card:hover{border-color:var(--bdr-h);transform:translateY(-2px)}
+.stat-val{font-size:1.6rem;font-weight:800;background:linear-gradient(135deg,var(--a1),var(--a3));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.stat-lbl{font-size:.62rem;color:var(--txt3);text-transform:uppercase;letter-spacing:1px;margin-top:3px;font-weight:600}
+.main{flex:1;position:relative;overflow:hidden}
+#graph-container{width:100%;height:100%}
+#graph-container svg{width:100%;height:100%}
+.node circle{stroke:rgba(255,255,255,.2);stroke-width:1.5px;cursor:pointer}
+.node circle:hover{stroke:#fff;stroke-width:2.5px}
+.node text{font-size:9px;fill:var(--txt2);font-family:'Inter',sans-serif;pointer-events:none}
+.link{stroke:rgba(99,102,241,.15);stroke-opacity:.6}
+.graph-controls{position:absolute;top:16px;right:16px;display:flex;flex-direction:column;gap:6px;z-index:5}
+.ctrl-btn{width:34px;height:34px;border-radius:var(--rs);background:var(--card);border:1px solid var(--bdr);color:var(--txt2);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:.9rem;transition:all .2s}
+.ctrl-btn:hover{border-color:var(--bdr-h);color:var(--txt);background:var(--card-h)}
+.legend{position:absolute;bottom:16px;left:16px;display:flex;gap:14px;padding:10px 16px;background:var(--card);backdrop-filter:blur(10px);border:1px solid var(--bdr);border-radius:var(--r);z-index:5}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:.7rem;color:var(--txt2)}
+.legend-dot{width:10px;height:10px;border-radius:50%}
+.search-box{position:absolute;top:16px;left:16px;z-index:5}
+.search-box input{width:220px;margin:0;background:var(--card);backdrop-filter:blur(10px);border:1px solid var(--bdr);padding:8px 14px 8px 34px;border-radius:20px}
+.toast-wrap{position:fixed;top:70px;right:16px;z-index:999;display:flex;flex-direction:column;gap:8px}
+.toast{padding:12px 18px;border-radius:var(--rs);background:var(--card);backdrop-filter:blur(10px);border:1px solid var(--bdr);font-size:.8rem;animation:slideIn .3s ease;display:flex;align-items:center;gap:8px}
+.toast-ok{border-left:3px solid var(--a4)}.toast-err{border-left:3px solid var(--danger)}.toast-info{border-left:3px solid var(--a3)}
+@keyframes slideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:none}}
+.loading-dots::after{content:'';animation:dots 1.5s infinite}
+@keyframes dots{0%{content:''}25%{content:'.'}50%{content:'..'}75%{content:'...'}}
+</style>
 </head>
 <body>
-    <div class="header">
-        <h1>🔍 GraphLens — AI Code Intelligence</h1>
-        <span class="badge">Graph Hacks 2026</span>
-    </div>
-    <div class="container">
-        <div class="sidebar">
-            <div class="panel">
-                <h3>📊 Graph Stats</h3>
-                <div class="stats-grid">
-                    <div class="stat-item"><div class="value" id="stat-nodes">—</div><div class="label">Nodes</div></div>
-                    <div class="stat-item"><div class="value" id="stat-edges">—</div><div class="label">Edges</div></div>
-                </div>
-            </div>
-            <div class="panel">
-                <h3>🤖 Ask the Agent</h3>
-                <textarea id="question" rows="3" placeholder="What is the most critical module?">What is the most critical module?</textarea>
-                <button onclick="askAgent()">Ask GraphLens</button>
-                <div id="answer-box">Answer will appear here...</div>
-            </div>
-            <div class="panel">
-                <h3>💥 Impact Analysis</h3>
-                <input id="impact-name" placeholder="Entity name" value="config">
-                <select id="impact-direction">
-                    <option value="downstream">Downstream (what breaks)</option>
-                    <option value="upstream">Upstream (what depends)</option>
-                </select>
-                <button onclick="runImpact()">Analyze Impact</button>
-                <div id="impact-result" style="font-size:0.8rem;max-height:120px;overflow-y:auto;"></div>
-            </div>
-            <div class="panel">
-                <h3>🔗 Shortest Path</h3>
-                <input id="path-source" placeholder="Source" value="parse_codebase">
-                <input id="path-target" placeholder="Target" value="GraphStore">
-                <button onclick="findPath()">Find Path</button>
-                <div id="path-result" style="font-size:0.8rem;max-height:80px;overflow-y:auto;"></div>
-            </div>
-            <div class="panel">
-                <h3>🏆 PageRank</h3>
-                <button onclick="runPageRank()">Run PageRank</button>
-                <div id="pagerank-result" style="font-size:0.8rem;max-height:120px;overflow-y:auto;"></div>
-            </div>
-        </div>
-        <div class="main"><div id="graph-container"></div></div>
-    </div>
-    <script src="/static/app.js"></script>
-</body>
-</html>
+<div class="toast-wrap" id="toasts"></div>
+<header class="header">
+<div class="header-left"><div class="logo">🔍</div>
+<div><h1>GraphLens</h1><div class="header-sub">AI Code Intelligence</div></div></div>
+<div class="header-right">
+<span class="pill pill-live" id="conn-pill">Connecting...</span>
+<span class="pill pill-hack">⚡ Graph Hacks 2026</span></div>
+</header>
+<div class="container">
+<aside class="sidebar">
+<div class="tabs">
+<div class="tab active" data-tab="agent">🤖 Agent</div>
+<div class="tab" data-tab="analysis">📊 Analysis</div>
+<div class="tab" data-tab="explore">🔗 Explore</div></div>
+<div class="tab-content">
+<div class="tab-panel active" id="tab-agent">
+<div class="stats-row">
+<div class="stat-card"><div class="stat-val" id="s-nodes">—</div><div class="stat-lbl">Nodes</div></div>
+<div class="stat-card"><div class="stat-val" id="s-edges">—</div><div class="stat-lbl">Edges</div></div></div>
+<div class="card"><div class="card-title"><span>🧠</span>Ask the Agent</div>
+<label>Your Question</label>
+<textarea id="q" placeholder="What is the most critical module?">What is the most critical module?</textarea>
+<button class="btn btn-primary" id="btn-ask" onclick="askAgent()">✨ Ask GraphLens</button>
+<div class="result-box" id="ans">Answer will appear here...</div></div></div>
+<div class="tab-panel" id="tab-analysis">
+<div class="card"><div class="card-title"><span>💥</span>Impact Analysis</div>
+<label>Entity Name</label><input id="imp-name" value="config">
+<label>Direction</label>
+<select id="imp-dir"><option value="downstream">Downstream (what breaks)</option><option value="upstream">Upstream (depends)</option></select>
+<button class="btn btn-primary" onclick="runImpact()">🔥 Analyze</button>
+<div class="result-box" id="imp-res"></div></div>
+<div class="card"><div class="card-title"><span>🏆</span>PageRank</div>
+<button class="btn btn-secondary" onclick="runPR()">Run PageRank</button>
+<div class="result-box" id="pr-res"></div></div></div>
+<div class="tab-panel" id="tab-explore">
+<div class="card"><div class="card-title"><span>🚩</span>Shortest Path</div>
+<label>Source</label><input id="p-src" value="parse_codebase">
+<label>Target</label><input id="p-tgt" value="GraphStore">
+<button class="btn btn-primary" onclick="findPath()">🔎 Find Path</button>
+<div class="result-box" id="p-res"></div></div>
+<div class="card"><div class="card-title"><span>🏘️</span>Communities</div>
+<button class="btn btn-secondary" onclick="runComm()">Detect</button>
+<div class="result-box" id="c-res"></div></div></div>
+</div></aside>
+<main class="main">
+<div class="search-box"><input id="node-search" placeholder="Search nodes..." oninput="searchNodes(this.value)"></div>
+<div class="graph-controls">
+<button class="ctrl-btn" onclick="zoomIn()" title="Zoom In">+</button>
+<button class="ctrl-btn" onclick="zoomOut()" title="Zoom Out">−</button>
+<button class="ctrl-btn" onclick="resetView()" title="Reset">↺</button>
+<button class="ctrl-btn" onclick="toggleLabels()" title="Labels">Aa</button></div>
+<div id="graph-container"></div>
+<div class="legend">
+<div class="legend-item"><div class="legend-dot" style="background:#6366f1"></div>Module</div>
+<div class="legend-item"><div class="legend-dot" style="background:#f97316"></div>Class</div>
+<div class="legend-item"><div class="legend-dot" style="background:#10b981"></div>Function</div>
+<div class="legend-item"><div class="legend-dot" style="background:#a78bfa"></div>Method</div>
+<div class="legend-item"><div class="legend-dot" style="background:#64748b"></div>External</div></div>
+</main></div>
+<script src="/static/app.js"></script>
+</body></html>
