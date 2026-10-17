@@ -180,10 +180,39 @@ def stats():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/db-status")
+def db_status():
+    """Verify live FalkorDB connection and stats."""
+    try:
+        t0 = time.perf_counter()
+        store = GraphStore()
+        res = store.get_graph_stats()
+        return {
+            "status": "connected",
+            "host": store.host,
+            "port": store.port,
+            "graph_name": store.graph_name,
+            "ssl": getattr(store, "ssl", False),
+            "total_nodes": res.get("total_nodes", 0),
+            "total_edges": res.get("total_edges", 0),
+            "query_time_ms": round((time.perf_counter() - t0) * 1000, 2),
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "host": store.host if 'store' in locals() else "unknown",
+            "port": store.port if 'store' in locals() else 0,
+        }
+
+
 @app.get("/graph")
 def graph_json(limit: int = 200):
-    store = GraphStore()
-    return get_graph_json(store, limit)
+    try:
+        store = GraphStore()
+        return get_graph_json(store, limit)
+    except Exception as e:
+        return {"nodes": [], "edges": [], "error": str(e)}
 
 
 @app.get("/graph/search")

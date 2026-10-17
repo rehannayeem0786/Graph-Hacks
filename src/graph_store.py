@@ -16,29 +16,62 @@ from src.config import (
 from src.parser import ParseResult
 
 
+_RESOLVED_SSL = None
+
+
 class GraphStore:
     """Manages the FalkorDB graph for code intelligence."""
 
     def __init__(self, host: str = None, port: int = None, graph_name: str = None,
                  password: str = None, ssl: bool = None, username: str = None):
+        global _RESOLVED_SSL
         self.host = host or FALKORDB_HOST
         self.port = port or FALKORDB_PORT
         self.graph_name = graph_name or FALKORDB_GRAPH_NAME
         self.password = password if password is not None else FALKORDB_PASSWORD
         self.username = username if username is not None else FALKORDB_USERNAME
-        self.ssl = ssl if ssl is not None else FALKORDB_SSL
+        
+        target_ssl = ssl if ssl is not None else FALKORDB_SSL
+        if _RESOLVED_SSL is not None and ssl is None:
+            target_ssl = _RESOLVED_SSL
 
-        connect_kwargs = {"host": self.host, "port": self.port}
+        connect_kwargs = {
+            "host": self.host,
+            "port": self.port,
+            "socket_connect_timeout": 3.0,
+            "socket_timeout": 5.0,
+        }
         if self.password:
             connect_kwargs["password"] = self.password
         if self.username:
             connect_kwargs["username"] = self.username
-        if self.ssl:
-            connect_kwargs["ssl"] = True
-            connect_kwargs["ssl_cert_reqs"] = None
 
-        self.client = FalkorDB(**connect_kwargs)
-        self.graph = self.client.select_graph(self.graph_name)
+        ssl_candidates = [target_ssl, False] if target_ssl else [False]
+        for use_ssl in ssl_candidates:
+            opts = dict(connect_kwargs)
+            opts["ssl"] = use_ssl
+            if use_ssl:
+                opts["ssl_cert_reqs"] = "none"
+            try:
+                candidate_client = FalkorDB(**opts)
+                candidate_graph = candidate_client.select_graph(self.graph_name)
+                candidate_graph.query("RETURN 1")
+                self.client = candidate_client
+                self.graph = candidate_graph
+                self.ssl = use_ssl
+                _RESOLVED_SSL = use_ssl
+                break
+            except Exception:
+                continue
+
+        if not hasattr(self, "client"):
+            opts = dict(connect_kwargs)
+            opts["ssl"] = target_ssl
+            if target_ssl:
+                opts["ssl_cert_reqs"] = "none"
+            self.client = FalkorDB(**opts)
+            self.graph = self.client.select_graph(self.graph_name)
+            self.ssl = target_ssl
 
     def ingest(self, parse_result: ParseResult) -> dict:
         """Ingest parsed code graph into FalkorDB with batch optimization."""

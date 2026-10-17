@@ -173,12 +173,24 @@ function activatePipelineStep(stepId) {
 /* ═══ Connection Check ═══ */
 async function checkConnection() {
   try {
-    const r = await fetch(API + '/health');
-    await r.json();
-    document.getElementById('conn-badge').innerHTML = '<span class="dot"></span> Connected';
+    const r = await fetch(API + '/db-status');
+    const d = await r.json();
+    if (d.status === 'connected') {
+      const isCloud = d.host && !d.host.includes('localhost') && !d.host.includes('127.0.0.1');
+      const label = isCloud ? 'FalkorDB Cloud' : 'FalkorDB';
+      document.getElementById('conn-badge').innerHTML = `<span class="dot"></span> Connected · ${label}`;
+    } else {
+      document.getElementById('conn-badge').innerHTML = '<span class="dot" style="background:#f59e0b"></span> DB Syncing...';
+    }
   } catch (e) {
-    document.getElementById('conn-badge').innerHTML = '❌ Offline';
-    document.getElementById('conn-badge').classList.remove('badge-live');
+    try {
+      const r2 = await fetch(API + '/health');
+      await r2.json();
+      document.getElementById('conn-badge').innerHTML = '<span class="dot"></span> Connected';
+    } catch (e2) {
+      document.getElementById('conn-badge').innerHTML = '❌ Offline';
+      document.getElementById('conn-badge').classList.remove('badge-live');
+    }
   }
 }
 
