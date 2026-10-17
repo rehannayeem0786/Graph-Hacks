@@ -79,3 +79,6 @@ dmypy.json
 SUBMISSION.md
 submission.md
 *submission*.md
+
+# Workflows (bypass token scope)
+.github/
