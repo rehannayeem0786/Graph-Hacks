@@ -9,18 +9,25 @@ import json
 from src.graph_store import GraphStore
 
 
-def get_graph_json(store: GraphStore, limit: int = 200) -> dict:
+def get_graph_json(store: GraphStore, limit: int = 500) -> dict:
     """Get the full graph as D3.js force-directed graph JSON."""
     nodes_raw = store.query(f"""
         MATCH (n)
         RETURN n.id AS id, n.name AS name, labels(n)[0] AS type,
                n.file AS file, n.line_start AS line_start
+        ORDER BY CASE labels(n)[0]
+            WHEN 'Module' THEN 1
+            WHEN 'Class' THEN 2
+            WHEN 'Function' THEN 3
+            WHEN 'Method' THEN 4
+            WHEN 'ExternalModule' THEN 5
+            ELSE 6 END
         LIMIT {limit}
     """)
     edges_raw = store.query(f"""
         MATCH (a)-[r]->(b)
         RETURN a.id AS source, b.id AS target, type(r) AS type, r.line AS line
-        LIMIT {limit}
+        LIMIT {limit * 2}
     """)
 
     nodes = []

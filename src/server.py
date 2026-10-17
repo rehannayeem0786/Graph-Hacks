@@ -207,7 +207,7 @@ def db_status():
 
 
 @app.get("/graph")
-def graph_json(limit: int = 200):
+def graph_json(limit: int = 500):
     try:
         store = GraphStore()
         return get_graph_json(store, limit)

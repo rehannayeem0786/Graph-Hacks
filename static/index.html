@@ -553,12 +553,17 @@ label.field-label {
   stroke-width: 3.5px;
   filter: drop-shadow(0 0 10px rgba(34, 211, 238, 0.85));
 }
-.node.search-matched text {
+.node.type-matched circle.main-circle {
+  stroke: #ffffff;
+  stroke-width: 3px;
+  filter: drop-shadow(0 0 10px currentColor);
+}
+.node.search-matched text, .node.type-matched text {
   fill: #ffffff !important;
   font-weight: 800 !important;
   font-size: 10px !important;
   opacity: 1 !important;
-  text-shadow: 0 0 8px rgba(6, 182, 212, 0.9), 0 1px 3px #000;
+  text-shadow: 0 0 8px rgba(0, 0, 0, 0.95), 0 1px 3px #000;
 }
 .node.path-active circle.main-circle {
   stroke: var(--accent-cyan); stroke-width: 3.5px;
@@ -1087,6 +1092,7 @@ label.field-label {
       <span class="filter-chip" data-type="Class" onclick="filterType('Class',this)">Class</span>
       <span class="filter-chip" data-type="Function" onclick="filterType('Function',this)">Function</span>
       <span class="filter-chip" data-type="Method" onclick="filterType('Method',this)">Method</span>
+      <span class="filter-chip" data-type="ExternalModule" onclick="filterType('ExternalModule',this)">External</span>
     </div>
     <!-- Legend -->
     <div class="legend">

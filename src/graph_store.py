@@ -190,17 +190,42 @@ class GraphStore:
 
     def find_shortest_path(self, source_name: str, target_name: str) -> list:
         """Find the shortest path between two nodes using native FalkorDB Cypher."""
-        cypher = """
+        cypher_fwd = """
         MATCH (a), (b)
         WHERE (a.name = $source OR a.id = $source) AND (b.name = $target OR b.id = $target)
-        WITH shortestPath((a)-[*..10]-(b)) AS path
+        WITH shortestPath((a)-[*..10]->(b)) AS path
+        WHERE path IS NOT NULL
         RETURN [n IN nodes(path) | n.name] AS path_nodes,
                [r IN relationships(path) | type(r)] AS path_edges,
                length(path) AS path_length
-        ORDER BY length(path) ASC
         LIMIT 1
         """
-        return self.query(cypher, {"source": source_name, "target": target_name})
+        try:
+            res = self.query(cypher_fwd, {"source": source_name, "target": target_name})
+            if res and len(res) > 0 and res[0][0]:
+                return res
+        except Exception:
+            pass
+
+        cypher_rev = """
+        MATCH (a), (b)
+        WHERE (a.name = $source OR a.id = $source) AND (b.name = $target OR b.id = $target)
+        WITH shortestPath((b)-[*..10]->(a)) AS path
+        WHERE path IS NOT NULL
+        RETURN [n IN nodes(path) | n.name] AS path_nodes,
+               [r IN relationships(path) | type(r)] AS path_edges,
+               length(path) AS path_length
+        LIMIT 1
+        """
+        try:
+            res_rev = self.query(cypher_rev, {"source": source_name, "target": target_name})
+            if res_rev and len(res_rev) > 0 and res_rev[0][0]:
+                row = res_rev[0]
+                return [[list(reversed(row[0])), list(reversed(row[1])), row[2]]]
+        except Exception:
+            pass
+
+        return []
 
     def pagerank(self, limit: int = 10) -> list:
         """Find the most important nodes via degree centrality."""

@@ -228,10 +228,11 @@ function askSuggestion(chip) {
 /* ═══ Graph Loading & Rendering (60/120 FPS Optimized) ═══ */
 async function loadGraph() {
   try {
-    const r = await fetch(API + '/graph?limit=160');
+    const r = await fetch(API + '/graph?limit=500');
     const d = await r.json();
-    allNodes = d.nodes;
-    allEdges = d.edges;
+    allNodes = d.nodes || [];
+    allEdges = d.edges || [];
+    updateFilterCounts();
     renderGraph(d);
   } catch (e) {
     document.getElementById('graph-container').innerHTML =
@@ -240,6 +241,19 @@ async function loadGraph() {
       '<p style="font-size:.9rem;font-weight:600">Cannot connect to GraphLens server</p>' +
       '<code style="font-size:.72rem;background:var(--bg-glass);padding:10px 18px;border-radius:var(--radius-md);border:1px solid var(--border-default)">python -m src.cli serve</code></div>';
   }
+}
+
+function updateFilterCounts() {
+  const counts = { all: allNodes.length };
+  allNodes.forEach(n => {
+    counts[n.type] = (counts[n.type] || 0) + 1;
+  });
+  document.querySelectorAll('.filter-chip').forEach(chip => {
+    const type = chip.dataset.type;
+    const label = type === 'all' ? 'All' : type === 'ExternalModule' ? 'External' : type;
+    const count = counts[type] || (type === 'all' ? allNodes.length : 0);
+    chip.textContent = count > 0 ? `${label} (${count})` : label;
+  });
 }
 
 function renderGraph(data) {
@@ -428,7 +442,8 @@ function applyGraphFilters() {
 
     d3.select(this)
       .classed('dimmed', !isVisible)
-      .classed('search-matched', !!q && isVisible);
+      .classed('search-matched', !!q && isVisible)
+      .classed('type-matched', type !== 'all' && isVisible);
   });
 
   linkGroup.selectAll('.link').each(function(l) {
