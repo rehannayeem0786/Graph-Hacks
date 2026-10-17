@@ -273,8 +273,8 @@ function renderGraph(data) {
   });
   const getNodeR = d => {
     const deg = nodeDegrees[d.id] || 0;
-    const base = d.type === 'Module' ? 14 : d.type === 'Class' ? 10 : d.type === 'Function' ? 7 : 5;
-    return Math.min(base + deg * 1.2, 22);
+    const base = d.type === 'Module' ? 16 : d.type === 'Class' ? 12 : d.type === 'Function' ? 9 : d.type === 'Method' ? 8 : 7;
+    return Math.min(base + Math.min(deg * 0.8, 8), 24);
   };
 
   const defs = svg.append('defs');
@@ -291,7 +291,7 @@ function renderGraph(data) {
 
   // Arrow marker
   defs.append('marker').attr('id', 'arrowhead').attr('viewBox', '0 -5 10 10')
-    .attr('refX', 22).attr('refY', 0).attr('markerWidth', 6).attr('markerHeight', 6)
+    .attr('refX', 24).attr('refY', 0).attr('markerWidth', 6).attr('markerHeight', 6)
     .attr('orient', 'auto')
     .append('path').attr('d', 'M0,-4L10,0L0,4').attr('fill', 'rgba(99,102,241,.35)');
 
@@ -299,18 +299,25 @@ function renderGraph(data) {
   zoomBehavior = d3.zoom().scaleExtent([.1, 8]).on('zoom', e => g.attr('transform', e.transform));
   svg.call(zoomBehavior);
 
-  // High performance force simulation with fast convergence
+  // Spacious force simulation: strong repulsion, collision boundaries, and type-based link distances
   simulation = d3.forceSimulation(data.nodes)
-    .alphaDecay(0.045)
-    .velocityDecay(0.42)
-    .force('link', d3.forceLink(data.edges).id(d => d.id).distance(65).strength(0.75))
-    .force('charge', d3.forceManyBody().strength(-150))
+    .alphaDecay(0.035)
+    .velocityDecay(0.38)
+    .force('link', d3.forceLink(data.edges).id(d => d.id).distance(d => {
+      const sType = typeof d.source === 'object' ? d.source.type : '';
+      const tType = typeof d.target === 'object' ? d.target.type : '';
+      if (sType === 'Module' || tType === 'Module') return 115;
+      if (sType === 'Class' || tType === 'Class') return 95;
+      return 80;
+    }).strength(0.65))
+    .force('charge', d3.forceManyBody().strength(-360).distanceMax(600))
+    .force('collide', d3.forceCollide().radius(d => getNodeR(d) + 16).iterations(2))
     .force('center', d3.forceCenter(W / 2, H / 2))
-    .force('x', d3.forceX(W / 2).strength(.035))
-    .force('y', d3.forceY(H / 2).strength(.035));
+    .force('x', d3.forceX(W / 2).strength(0.016))
+    .force('y', d3.forceY(H / 2).strength(0.016));
 
-  // Pre-warm 35 ticks so the graph appears instantly organized
-  for (let i = 0; i < 35; ++i) simulation.tick();
+  // Pre-warm 50 ticks so the graph appears instantly organized and balanced
+  for (let i = 0; i < 50; ++i) simulation.tick();
 
   // Links
   linkGroup = g.append('g').attr('class', 'links');
@@ -371,7 +378,7 @@ function renderGraph(data) {
 
   // Initial gentle center zoom
   setTimeout(() => {
-    svg.transition().duration(600).call(zoomBehavior.transform, d3.zoomIdentity.translate(0, 0).scale(.85));
+    svg.transition().duration(600).call(zoomBehavior.transform, d3.zoomIdentity.translate(0, 0).scale(.76));
   }, 400);
 }
 

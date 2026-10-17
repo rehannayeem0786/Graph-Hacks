@@ -10,9 +10,10 @@ from src.graph_store import GraphStore
 
 
 def get_graph_json(store: GraphStore, limit: int = 500) -> dict:
-    """Get the full graph as D3.js force-directed graph JSON."""
+    """Get the full architectural graph as D3.js force-directed graph JSON."""
     nodes_raw = store.query(f"""
         MATCH (n)
+        WHERE NOT n:Call
         RETURN n.id AS id, n.name AS name, labels(n)[0] AS type,
                n.file AS file, n.line_start AS line_start
         ORDER BY CASE labels(n)[0]
@@ -26,6 +27,7 @@ def get_graph_json(store: GraphStore, limit: int = 500) -> dict:
     """)
     edges_raw = store.query(f"""
         MATCH (a)-[r]->(b)
+        WHERE NOT a:Call AND NOT b:Call
         RETURN a.id AS source, b.id AS target, type(r) AS type, r.line AS line
         LIMIT {limit * 2}
     """)
