@@ -53,9 +53,13 @@ def get_graph_json(store: GraphStore, limit: int = 200) -> dict:
 
 def get_path_visualization(store: GraphStore, source: str, target: str) -> dict:
     """Visualize the shortest path between two entities."""
-    results = store.find_shortest_path(source, target)
-    if not results:
-        return {"path": [], "message": f"No path found between '{source}' and '{target}'"}
+    try:
+        results = store.find_shortest_path(source, target)
+    except Exception as e:
+        return {"path": [], "message": f"Query error: {str(e)}", "hops": 0, "nodes": [], "edges": []}
+
+    if not results or not results[0] or not results[0][0]:
+        return {"path": [], "message": f"No path found between '{source}' and '{target}'", "hops": 0, "nodes": [], "edges": []}
 
     path_nodes = results[0][0]
     path_edges = results[0][1]

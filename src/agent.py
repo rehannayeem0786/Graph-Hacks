@@ -1,5 +1,8 @@
 """
 GraphLens Agent — the AI brain that reasons over the code graph.
+
+Wires in FalkorDB-backed memory so the agent remembers across sessions (Track 02).
+Supports reasoning trace for explainable answers (Track 01).
 """
 
 import json
@@ -10,9 +13,12 @@ from src.config import (
     OPENROUTER_API_KEY, OPENROUTER_MODEL, OPENROUTER_BASE_URL,
 )
 from src.graph_store import GraphStore
+from src.memory import AgentMemory
 
 SYSTEM_PROMPT = """You are GraphLens, an expert code intelligence agent.
-Tools (respond JSON {"tool":"...","args":{...}} or {"answer":"...","graph_path":"..."}):
+You reason over a FalkorDB knowledge graph of a codebase.
+
+Tools (respond with JSON {"tool":"...","args":{...}} or {"answer":"...","graph_path":"A -[REL]-> B -[REL]-> C"}):
 - impact_analysis: {"name":"...","direction":"downstream|upstream"}
 - find_dependencies: {"name":"...","depth":3}
 - find_shortest_path: {"source":"...","target":"..."}
@@ -21,52 +27,130 @@ Tools (respond JSON {"tool":"...","args":{...}} or {"answer":"...","graph_path":
 - community_detection: {}
 - get_stats: {}
 - cypher: {"query":"MATCH ..."}
-RULES: Always use a tool first. Explain the GRAPH PATH. Show multi-hop: A-[CALLS]->B-[IMPORTS]->C."""
+
+RULES:
+1. ALWAYS use at least one tool before answering. Do NOT guess — query the graph.
+2. Show the GRAPH PATH in your answer: A -[CALLS]-> B -[IMPORTS]-> C.
+3. Explain multi-hop reasoning: which nodes, which edges, what the traversal reveals.
+4. If multiple tools are needed, call them one at a time. Each result feeds the next step.
+5. Your answer must include "graph_path" showing the exact traversal.
+6. Be specific: name the actual nodes and relationship types from the graph."""
 
 
 class GraphLensAgent:
-    """AI Agent that reasons over the code knowledge graph."""
+    """AI Agent that reasons over the code knowledge graph with persistent memory."""
 
-    def __init__(self, store: GraphStore):
+    def __init__(self, store: GraphStore, session_id: str = "default"):
         self.store = store
         self.history: list[dict] = []
         self.last_trace: list[dict] = []
+        self.last_path_nodes: list[str] = []
+        # Track 02: Wire in persistent memory
+        self.memory = AgentMemory(store, session_id=session_id)
 
     def ask(self, question: str) -> str:
-        """Process a user question through the agent loop."""
+        """Process a user question through the agent loop with memory."""
+        self.last_trace = []
+        self.last_path_nodes = []
         self.history.append({"role": "user", "content": question})
+
+        # Track 02: Recall relevant memories from previous sessions
+        memory_context = self.memory.get_context()
+
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "system", "content": f"Schema: {self.store.get_schema()}"},
-        ] + self.history[-10:]
+            {"role": "system", "content": f"Graph Schema: {self.store.get_schema()}"},
+        ]
 
-        for _ in range(5):
+        # Inject memory context if available
+        if memory_context:
+            messages.append({
+                "role": "system",
+                "content": f"Agent Memory (learned from previous sessions):\n{memory_context}"
+            })
+
+        messages.extend(self.history[-10:])
+
+        for iteration in range(6):
             raw = self._llm_chat(messages)
             parsed = self._parse_json(raw)
+
             if parsed is None:
+                # Plain text answer
                 self.history.append({"role": "assistant", "content": raw})
+                self._auto_remember(question, raw)
                 return raw
 
             if "answer" in parsed:
                 final = parsed["answer"]
-                if "graph_path" in parsed:
-                    final += f"\n\nGraph Path: {parsed['graph_path']}"
+                graph_path = parsed.get("graph_path", "")
+                if graph_path:
+                    final += f"\n\n📊 Graph Path: {graph_path}"
+                    # Extract node names from graph path for animation
+                    self.last_path_nodes = self._extract_path_nodes(graph_path)
+
                 self.history.append({"role": "assistant", "content": final})
+                # Track 02: Auto-remember key insights
+                self._auto_remember(question, final)
                 return final
 
             if "tool" in parsed:
-                result = self._execute_tool(parsed["tool"], parsed.get("args", {}))
+                tool_name = parsed["tool"]
+                tool_args = parsed.get("args", {})
+                result = self._execute_tool(tool_name, tool_args)
+
                 self.last_trace.append({
                     "step": len(self.last_trace) + 1,
-                    "tool": parsed["tool"],
-                    "args": parsed.get("args", {}),
-                    "preview": result[:280],
+                    "tool": tool_name,
+                    "args": tool_args,
+                    "preview": result[:300],
                 })
+
                 messages.append({"role": "assistant", "content": raw})
-                messages.append({"role": "user", "content": f"Tool result:\n{result}\nNow answer."})
+                messages.append({
+                    "role": "user",
+                    "content": f"Tool result ({tool_name}):\n{result}\n\n"
+                    "Now synthesize this into a clear answer. Include the graph_path showing the traversal."
+                })
                 continue
 
         return "Agent reached maximum reasoning steps."
+
+    def _auto_remember(self, question: str, answer: str):
+        """Track 02: Automatically extract and store key insights from the conversation."""
+        try:
+            # Store the decision with graph path
+            self.memory.remember_decision(
+                question=question,
+                answer=answer[:500],
+                graph_path=", ".join(self.last_path_nodes) if self.last_path_nodes else ""
+            )
+
+            # Extract key facts to remember
+            keywords = ["critical", "important", "most", "depends", "breaks", "risk", "impact"]
+            if any(kw in answer.lower() for kw in keywords):
+                # Store a condensed fact
+                fact = answer.split("\n")[0][:200] if answer else ""
+                if fact and len(fact) > 20:
+                    self.memory.remember(
+                        fact=fact,
+                        category="insight"
+                    )
+        except Exception:
+            pass  # Memory is best-effort, never block the agent
+
+    @staticmethod
+    def _extract_path_nodes(graph_path: str) -> list[str]:
+        """Extract node names from a graph path string like 'A -[CALLS]-> B -[IMPORTS]-> C'."""
+        nodes = []
+        parts = graph_path.replace("->", " ").replace("-[", " ").replace("]-", " ").split()
+        for part in parts:
+            part = part.strip()
+            if part and not part.startswith("[") and not part.endswith("]") \
+               and part not in ("CALLS", "IMPORTS", "INHERITS", "CONTAINS", "USES",
+                                "RELATES_TO", ">", "-"):
+                nodes.append(part)
+        return nodes
 
     @staticmethod
     def _parse_json(text: str) -> dict | None:

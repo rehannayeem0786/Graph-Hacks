@@ -21,7 +21,14 @@ from src.parser import parse_codebase
 from src.graph_store import GraphStore
 from src.agent import GraphLensAgent
 
-console = Console()
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
+console = Console(legacy_windows=False)
 
 
 def cmd_ingest(path: str):

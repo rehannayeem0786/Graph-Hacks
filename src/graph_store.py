@@ -124,13 +124,16 @@ class GraphStore:
         }
 
     def find_shortest_path(self, source_name: str, target_name: str) -> list:
-        """Find the shortest path between two nodes."""
+        """Find the shortest path between two nodes using native FalkorDB Cypher."""
         cypher = """
-        MATCH path = shortestPath((a)-[*..10]-(b))
-        WHERE a.name = $source AND b.name = $target
+        MATCH (a), (b)
+        WHERE (a.name = $source OR a.id = $source) AND (b.name = $target OR b.id = $target)
+        WITH shortestPath((a)-[*..10]-(b)) AS path
         RETURN [n IN nodes(path) | n.name] AS path_nodes,
                [r IN relationships(path) | type(r)] AS path_edges,
                length(path) AS path_length
+        ORDER BY length(path) ASC
+        LIMIT 1
         """
         return self.query(cypher, {"source": source_name, "target": target_name})
 
