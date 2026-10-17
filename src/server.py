@@ -41,8 +41,29 @@ import json
 import time
 import asyncio
 
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    def auto_ingest():
+        try:
+            store = GraphStore()
+            stats = store.get_graph_stats()
+            if stats.get("total_nodes", 0) == 0:
+                print("⚡ Empty FalkorDB graph detected. Auto-ingesting ./src codebase in background...")
+                result = parse_codebase("./src")
+                ingest_stats = store.ingest(result)
+                print(f"✅ Auto-ingest complete: {ingest_stats['nodes_created']} nodes, {ingest_stats['edges_created']} edges created.")
+        except Exception as e:
+            print(f"⚠️ Startup auto-ingest notice: {e}")
+
+    loop = asyncio.get_event_loop()
+    loop.run_in_executor(None, auto_ingest)
+    yield
+
 app = FastAPI(title="GraphLens API", version="2.0.0",
-              description="AI Code Intelligence powered by FalkorDB")
+              description="AI Code Intelligence powered by FalkorDB",
+              lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"],
                    allow_methods=["*"], allow_headers=["*"])
 _static_dir = Path(__file__).parent.parent / "static"

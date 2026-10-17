@@ -11,7 +11,7 @@ from falkordb import FalkorDB
 
 from src.config import (
     FALKORDB_HOST, FALKORDB_PORT, FALKORDB_GRAPH_NAME,
-    FALKORDB_PASSWORD, FALKORDB_SSL,
+    FALKORDB_PASSWORD, FALKORDB_USERNAME, FALKORDB_SSL,
 )
 from src.parser import ParseResult
 
@@ -20,16 +20,19 @@ class GraphStore:
     """Manages the FalkorDB graph for code intelligence."""
 
     def __init__(self, host: str = None, port: int = None, graph_name: str = None,
-                 password: str = None, ssl: bool = None):
+                 password: str = None, ssl: bool = None, username: str = None):
         self.host = host or FALKORDB_HOST
         self.port = port or FALKORDB_PORT
         self.graph_name = graph_name or FALKORDB_GRAPH_NAME
         self.password = password if password is not None else FALKORDB_PASSWORD
+        self.username = username if username is not None else FALKORDB_USERNAME
         self.ssl = ssl if ssl is not None else FALKORDB_SSL
 
         connect_kwargs = {"host": self.host, "port": self.port}
         if self.password:
             connect_kwargs["password"] = self.password
+        if self.username:
+            connect_kwargs["username"] = self.username
         if self.ssl:
             connect_kwargs["ssl"] = True
             connect_kwargs["ssl_cert_reqs"] = None
@@ -38,32 +41,61 @@ class GraphStore:
         self.graph = self.client.select_graph(self.graph_name)
 
     def ingest(self, parse_result: ParseResult) -> dict:
-        """Ingest parsed code graph into FalkorDB."""
+        """Ingest parsed code graph into FalkorDB with batch optimization."""
+        from collections import defaultdict
         stats = {"nodes_created": 0, "edges_created": 0}
+
+        # 1. Group nodes by type for fast batch UNWIND
+        nodes_by_type = defaultdict(list)
         for node in parse_result.nodes:
             d = node.to_dict()
-            node_type = d.pop("type", "Node")
-            props = ", ".join(
-                f"{k}: ${k}" for k in d if d[k] is not None and d[k] != ""
-            )
-            query = f"MERGE (n:{node_type} {{id: $id}}) SET n += {{{props}}}"
-            try:
-                self.graph.query(query, d)
-                stats["nodes_created"] += 1
-            except Exception:
-                pass
+            ntype = d.pop("type", "Node")
+            nodes_by_type[ntype].append(d)
+
+        for ntype, items in nodes_by_type.items():
+            for i in range(0, len(items), 50):
+                batch = items[i:i + 50]
+                query = f"UNWIND $batch AS item MERGE (n:{ntype} {{id: item.id}}) SET n += item"
+                try:
+                    self.graph.query(query, {"batch": batch})
+                    stats["nodes_created"] += len(batch)
+                except Exception:
+                    for item in batch:
+                        try:
+                            self.graph.query(f"MERGE (n:{ntype} {{id: $id}}) SET n += $props", {"id": item["id"], "props": item})
+                            stats["nodes_created"] += 1
+                        except Exception:
+                            pass
+
+        # 2. Group edges by type for fast batch UNWIND
+        edges_by_type = defaultdict(list)
         for edge in parse_result.edges:
             d = edge.to_dict()
-            edge_type = d.pop("type", "RELATES_TO")
-            query = (
-                f"MATCH (a {{id: $source}}), (b {{id: $target}}) "
-                f"MERGE (a)-[r:{edge_type} {{line: $line}}]->(b)"
-            )
-            try:
-                self.graph.query(query, d)
-                stats["edges_created"] += 1
-            except Exception:
-                pass
+            etype = d.pop("type", "RELATES_TO")
+            edges_by_type[etype].append(d)
+
+        for etype, items in edges_by_type.items():
+            for i in range(0, len(items), 50):
+                batch = items[i:i + 50]
+                query = (
+                    f"UNWIND $batch AS item "
+                    f"MATCH (a {{id: item.source}}), (b {{id: item.target}}) "
+                    f"MERGE (a)-[r:{etype} {{line: item.line}}]->(b)"
+                )
+                try:
+                    self.graph.query(query, {"batch": batch})
+                    stats["edges_created"] += len(batch)
+                except Exception:
+                    for item in batch:
+                        try:
+                            self.graph.query(
+                                f"MATCH (a {{id: $source}}), (b {{id: $target}}) "
+                                f"MERGE (a)-[r:{etype} {{line: $line}}]->(b)",
+                                item
+                            )
+                            stats["edges_created"] += 1
+                        except Exception:
+                            pass
         return stats
 
     def query(self, cypher: str, params: dict = None) -> list:

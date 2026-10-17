@@ -73,14 +73,16 @@ def cmd_stats():
 def cmd_serve():
     """Start the FastAPI server with the D3.js visualization UI."""
     import uvicorn
+    import os
     from src.server import app
+    port = int(os.getenv("PORT", 8000))
     console.print(Panel(
-        "🚀 Starting GraphLens API server\n"
-        "   Dashboard: http://localhost:8000\n"
-        "   API Docs:  http://localhost:8000/docs",
+        f"🚀 Starting GraphLens API server\n"
+        f"   Host: 0.0.0.0, Port: {port}\n"
+        f"   API Docs: /docs",
         border_style="green",
     ))
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=port)
 
 
 def cmd_viz():
