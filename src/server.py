@@ -69,7 +69,7 @@ def ask(req: AskRequest):
         store = GraphStore()
         agent = GraphLensAgent(store)
         answer = agent.ask(req.question)
-        return {"answer": answer}
+        return {"answer": answer, "trace": getattr(agent, "last_trace", [])}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -137,3 +137,47 @@ def dashboard():
     if index_path.exists():
         return index_path.read_text(encoding="utf-8")
     return "<h1>GraphLens API</h1><p>Visit /docs for API docs.</p>"
+
+@app.get("/graph/node/{name}")
+def graph_node_detail(name: str):
+    """Get full details + connections for a specific node."""
+    try:
+        store = GraphStore()
+        node_info = store.query(
+            "MATCH (n) WHERE n.name = $name "
+            "RETURN n.name AS name, labels(n)[0] AS type, n.file AS file, "
+            "n.line_start AS line_start, n.docstring AS doc",
+            {"name": name}
+        )
+        if not node_info:
+            raise HTTPException(status_code=404, detail=f"Node '{name}' not found")
+        connections = store.query(
+            "MATCH (n)-[r]-(other) WHERE n.name = $name "
+            "RETURN other.name AS other, type(r) AS rel, labels(other)[0] AS other_type, "
+            "CASE WHEN startNode(r).name = $name THEN 'outgoing' ELSE 'incoming' END AS dir "
+            "LIMIT 20",
+            {"name": name}
+        )
+        return {
+            "name": node_info[0][0], "type": node_info[0][1],
+            "file": node_info[0][2], "line": node_info[0][3],
+            "doc": node_info[0][4] or "",
+            "connections": [{"name": c[0], "relation": c[1], "type": c[2], "direction": c[3]} for c in connections]
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/suggestions")
+def get_suggestions():
+    """Return pre-built demo questions for the agent."""
+    return [
+        {"q": "What breaks if I change the parser?", "icon": "🔥"},
+        {"q": "What is the most critical module?", "icon": "🏆"},
+        {"q": "How does the agent connect to the graph?", "icon": "🔗"},
+        {"q": "Show me the community structure", "icon": "🏘️"},
+        {"q": "What is the impact of config.py?", "icon": "⚡"},
+        {"q": "Find path from parse_codebase to GraphStore", "icon": "🔍"},
+    ]

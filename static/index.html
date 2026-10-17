@@ -138,8 +138,58 @@ select{cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%
 .skeleton{background:linear-gradient(90deg,rgba(99,102,241,.05) 25%,rgba(99,102,241,.1) 50%,rgba(99,102,241,.05) 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:var(--rs)}
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 @media(max-width:900px){.sidebar{width:320px}.filter-bar{bottom:70px}}
+
+/* Tour Overlay */
+.tour-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);z-index:1000;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .4s}
+.tour-overlay.active{opacity:1;pointer-events:auto}
+.tour-card{background:rgba(15,23,42,.95);border:1px solid var(--bdr);border-radius:20px;padding:32px;max-width:520px;width:90%;box-shadow:0 24px 80px rgba(0,0,0,.6)}
+.tour-card h2{font-size:1.4rem;font-weight:800;margin-bottom:8px;background:linear-gradient(135deg,#fff,var(--a3));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.tour-card p{color:var(--txt2);font-size:.85rem;line-height:1.6;margin-bottom:16px}
+.tour-steps{display:flex;gap:6px;margin-bottom:20px}
+.tour-dot{width:8px;height:8px;border-radius:50%;background:rgba(99,102,241,.2);transition:all .3s}
+.tour-dot.active{background:var(--a1);box-shadow:0 0 8px var(--a1)}
+.tour-actions{display:flex;gap:10px;justify-content:flex-end}
+.tour-btn{padding:10px 20px;border-radius:var(--rs);font-size:.8rem;font-weight:600;cursor:pointer;border:none;transition:all .25s}
+.tour-btn-primary{background:linear-gradient(135deg,var(--a1),var(--a2));color:#fff;box-shadow:0 4px 16px rgba(99,102,241,.3)}
+.tour-btn-primary:hover{transform:translateY(-2px);box-shadow:0 6px 24px rgba(99,102,241,.4)}
+.tour-btn-ghost{background:transparent;color:var(--txt3);border:1px solid var(--bdr)}
+.tour-btn-ghost:hover{color:var(--txt);border-color:var(--bdr-h)}
+/* Suggestion Chips */
+.suggestions{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.chip{padding:6px 12px;border-radius:16px;font-size:.68rem;font-weight:500;cursor:pointer;border:1px solid var(--bdr);background:var(--card);color:var(--txt2);transition:all .25s;backdrop-filter:blur(4px)}
+.chip:hover{border-color:var(--a1);color:var(--a1);background:rgba(99,102,241,.08);transform:translateY(-1px)}
+/* Typing indicator */
+.typing{display:inline-flex;gap:3px;align-items:center;padding:4px 0}
+.typing span{width:5px;height:5px;border-radius:50%;background:var(--a1);animation:typeDot 1.2s infinite}
+.typing span:nth-child(2){animation-delay:.2s}
+.typing span:nth-child(3){animation-delay:.4s}
+@keyframes typeDot{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-4px);opacity:1}}
+/* Particles */
+.particles{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
+.particle{position:absolute;width:2px;height:2px;background:rgba(99,102,241,.3);border-radius:50%;animation:float linear infinite}
+@keyframes float{0%{transform:translateY(100vh) rotate(0deg);opacity:0}10%{opacity:1}90%{opacity:1}100%{transform:translateY(-10vh) rotate(720deg);opacity:0}}
+
+/* Reasoning trace */
+.trace-box{margin-top:12px;border-top:1px solid var(--bdr);padding-top:10px}
+.trace-title{font-size:.68rem;font-weight:700;color:var(--a2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px}
+.trace-step{display:flex;gap:8px;padding:6px 8px;margin:4px 0;border-radius:8px;background:rgba(99,102,241,.05);border:1px solid rgba(99,102,241,.08);font-size:.7rem;animation:fadeUp .4s ease both;align-items:center}
+.trace-step .tn{color:var(--a1);font-weight:700;min-width:20px}
+.trace-step .tt{color:var(--a3);font-family:'JetBrains Mono',monospace;font-weight:600}
+.trace-step .tp{color:var(--txt3);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 </style></head>
 <body>
+<div class="particles" id="particles"></div>
+<!-- Tour Overlay -->
+<div class="tour-overlay active" id="tour">
+<div class="tour-card">
+<h2 id="tour-title">Welcome to GraphLens</h2>
+<p id="tour-text">Turn any codebase into a queryable knowledge graph. Ask questions. Get explainable answers powered by FalkorDB.</p>
+<div class="tour-steps" id="tour-dots"></div>
+<div class="tour-actions">
+<button class="tour-btn tour-btn-ghost" onclick="closeTour()">Skip</button>
+<button class="tour-btn tour-btn-primary" id="tour-next" onclick="nextTour()">Next &#8594;</button>
+</div></div></div>
 <div class="toast-wrap" id="toasts"></div>
 <!-- Command Palette -->
 <div class="cmd-overlay" id="cmd-palette">
@@ -152,6 +202,7 @@ select{cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%
 <div class="header-left"><div class="logo">&#x1F50D;</div>
 <div><h1>GraphLens</h1><div class="header-sub">AI Code Intelligence</div></div></div>
 <div class="header-right">
+<button class="btn btn-primary" style="padding:6px 16px;font-size:.72rem;border-radius:20px" onclick="runDemo()">&#9654; Run Demo</button>
 <span class="pill pill-live" id="conn-pill">Connecting...</span>
 <span class="pill pill-hack">&#x26A1; Graph Hacks 2026</span>
 <span class="kbd">Ctrl+K</span></div>
@@ -172,6 +223,13 @@ select{cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%
 <div class="card"><div class="card-title"><span>&#x1F9E0;</span>Ask the Agent</div>
 <label>Your Question</label>
 <textarea id="q" placeholder="What is the most critical module? What would break if I change config?">What is the most critical module?</textarea>
+<div class="suggestions" style="display:flex;flex-wrap:wrap;gap:6px;margin:10px 0">
+<span class="chip" onclick="askSuggestion(this)">What breaks if I change the parser?</span>
+<span class="chip" onclick="askSuggestion(this)">What is the most critical module?</span>
+<span class="chip" onclick="askSuggestion(this)">How does agent connect to graph?</span>
+<span class="chip" onclick="askSuggestion(this)">Impact of config.py</span>
+<span class="chip" onclick="askSuggestion(this)">Show communities</span>
+</div>
 <button class="btn btn-primary" id="btn-ask" onclick="askAgent()" style="margin-top:10px">&#x2728; Ask GraphLens</button>
 <div class="result-box" id="ans">Answer will appear here...</div></div></div>
 <!-- Analysis Tab -->

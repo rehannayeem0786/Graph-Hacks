@@ -1,7 +1,32 @@
+
+/* === Tour System === */
+const TOUR_STEPS=[
+{title:'Welcome to GraphLens',text:'Turn any codebase into a queryable knowledge graph. Ask questions. Get explainable answers powered by FalkorDB.'},
+{title:'Interactive Graph',text:'Explore your code as a force-directed graph. Drag nodes, zoom, filter by type, and click any node to see its connections.'},
+{title:'AI Agent',text:'Ask natural language questions like "What breaks if I change the parser?" The agent reasons over the graph and shows the exact path.'},
+{title:'Graph Algorithms',text:'Run PageRank, impact analysis, shortest path, and community detection — all powered by FalkorDB graph traversals.'},
+{title:'Try It!',text:'Click a suggestion chip or press Ctrl+K to search. The graph is live and ready to explore.'}
+];
+let tourStep=0;
+function initTour(){const dots=document.getElementById('tour-dots');dots.innerHTML=TOUR_STEPS.map((_,i)=>`<div class="tour-dot${i===0?' active':''}"></div>`).join('');}
+function nextTour(){tourStep++;if(tourStep>=TOUR_STEPS.length){closeTour();return;}
+document.getElementById('tour-title').textContent=TOUR_STEPS[tourStep].title;
+document.getElementById('tour-text').textContent=TOUR_STEPS[tourStep].text;
+document.querySelectorAll('.tour-dot').forEach((d,i)=>d.classList.toggle('active',i===tourStep));
+if(tourStep===TOUR_STEPS.length-1)document.getElementById('tour-next').innerHTML='Start Exploring &#127881;';}
+function closeTour(){document.getElementById('tour').classList.remove('active');}
+
+/* === Particles === */
+function initParticles(){const c=document.getElementById('particles');for(let i=0;i<30;i++){const p=document.createElement('div');p.className='particle';p.style.left=Math.random()*100+'%';p.style.animationDuration=(8+Math.random()*12)+'s';p.style.animationDelay=Math.random()*10+'s';p.style.width=p.style.height=(1+Math.random()*2)+'px';c.appendChild(p);}}
+
+/* === Suggestion Chips === */
+function askSuggestion(chip){document.getElementById('q').value=chip.textContent;askAgent();}
+
+/* === Enhanced askAgent with typing === */
 const API=window.location.origin;
 let simulation,svg,g,link,node,zoomB,showLabels=true,allNodes=[],allEdges=[],activeFilter='all';
 const COLORS={Module:'#6366f1',Class:'#f97316',Function:'#10b981',Method:'#a78bfa',ExternalModule:'#64748b',Agent:'#f59e0b',Memory:'#ec4899',Task:'#14b8a6'};
-document.addEventListener('DOMContentLoaded',()=>{initTabs();loadGraph();loadStats();checkConn();initCmdPalette();initKeyboard();});
+document.addEventListener('DOMContentLoaded',()=>{initTabs();loadGraph();loadStats();checkConn();initCmdPalette();initKeyboard();initTour();initParticles();});
 function initTabs(){document.querySelectorAll('.tab').forEach(t=>{t.addEventListener('click',()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tab-panel').forEach(x=>x.classList.remove('active'));t.classList.add('active');document.getElementById('tab-'+t.dataset.tab).classList.add('active');});});}
 function initKeyboard(){document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='k'){e.preventDefault();toggleCmdPalette();}if(e.key==='Escape'){closeCmdPalette();closeDetail();}});}
 function initCmdPalette(){const input=document.getElementById('cmd-input');input.addEventListener('input',()=>searchCmd(input.value));input.addEventListener('keydown',e=>{if(e.key==='Enter'){const sel=document.querySelector('.cmd-item.selected');if(sel)sel.click();}});}
@@ -172,3 +197,31 @@ setTimeout(()=>{t.style.opacity='0';t.style.transform='translateX(20px)';t.style
 
 /* === Spinner keyframe (injected) === */
 const style=document.createElement('style');style.textContent='@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}';document.head.appendChild(style);
+
+
+/* === Trace-aware askAgent (overrides earlier definition) === */
+async function askAgent(){const q=document.getElementById('q').value.trim();if(!q)return;
+const btn=document.getElementById('btn-ask'),box=document.getElementById('ans');
+btn.disabled=true;btn.innerHTML='<span style="display:inline-block;animation:spin 1s linear infinite">\u2699</span> Reasoning over graph...';
+box.innerHTML='<div class="skeleton" style="height:14px;margin:4px 0"></div><div class="skeleton" style="height:14px;margin:4px 0;width:80%"></div><div class="skeleton" style="height:14px;margin:4px 0;width:60%"></div>';
+try{const r=await fetch(API+'/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q})});
+const d=await r.json();
+let h='<div style="white-space:pre-wrap;line-height:1.6;font-size:.8rem">'+escapeHtml(d.answer||'No answer')+'</div>';
+if(d.trace&&d.trace.length){h+='<div class="trace-box"><div class="trace-title">\u{1F9E0} Agent Reasoning Trace \u2014 '+d.trace.length+' graph tool call'+(d.trace.length>1?'s':'')+'</div>';
+d.trace.forEach(t=>{h+='<div class="trace-step"><span class="tn">'+t.step+'</span><span class="tt">\u{1F527} '+escapeHtml(t.tool)+'</span><span class="tp">'+escapeHtml(JSON.stringify(t.args||{}))+'</span></div>';});
+h+='</div>';}
+box.innerHTML=h;toast('Agent reasoned over the graph','ok');
+}catch(e){box.textContent='Error: '+e.message;toast('Agent error','err');}
+btn.disabled=false;btn.innerHTML='\u{1F916} Ask GraphLens';}
+function escapeHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+/* === Run Demo autoplay === */
+async function runDemo(){
+toast('\u{1F3AC} Demo step 1/3: PageRank over the code graph','info');
+document.querySelector('[data-tab="analysis"]').click();runPR();await sleep(2000);
+toast('\u{1F525} Demo step 2/3: Impact analysis of parser','info');
+document.getElementById('imp-name').value='parser';runImpact();await sleep(2000);
+toast('\u{1F916} Demo step 3/3: AI agent answers with reasoning trace','info');
+document.querySelector('[data-tab="ask"]').click();
+document.getElementById('q').value='What is the most critical module and why?';askAgent();}
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}

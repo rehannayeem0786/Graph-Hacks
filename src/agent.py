@@ -30,6 +30,7 @@ class GraphLensAgent:
     def __init__(self, store: GraphStore):
         self.store = store
         self.history: list[dict] = []
+        self.last_trace: list[dict] = []
 
     def ask(self, question: str) -> str:
         """Process a user question through the agent loop."""
@@ -55,6 +56,12 @@ class GraphLensAgent:
 
             if "tool" in parsed:
                 result = self._execute_tool(parsed["tool"], parsed.get("args", {}))
+                self.last_trace.append({
+                    "step": len(self.last_trace) + 1,
+                    "tool": parsed["tool"],
+                    "args": parsed.get("args", {}),
+                    "preview": result[:280],
+                })
                 messages.append({"role": "assistant", "content": raw})
                 messages.append({"role": "user", "content": f"Tool result:\n{result}\nNow answer."})
                 continue
