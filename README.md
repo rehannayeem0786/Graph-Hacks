@@ -211,6 +211,10 @@ python -m pytest tests/ -v
 # 43/43 passing with FalkorDB running
 ```
 
+## 🤖 AI Coding Assistant Disclosure
+
+AI coding assistants were used during development for code generation and debugging. All architecture decisions, graph modeling, agent design, and technical choices were made by the developer. The developer understands and can explain every component of this codebase.
+
 ## 📄 License
 
 MIT License
