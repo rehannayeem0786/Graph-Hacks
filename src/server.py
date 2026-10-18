@@ -54,6 +54,11 @@ async def lifespan(app: FastAPI):
                 result = parse_codebase("./src")
                 ingest_stats = store.ingest(result)
                 print(f"✅ Auto-ingest complete: {ingest_stats['nodes_created']} nodes, {ingest_stats['edges_created']} edges created.")
+            # Idempotent: connect Call/ExternalModule islands to real definitions
+            link_stats = store.link_definitions()
+            if link_stats.get("resolved_calls") or link_stats.get("aliased_imports"):
+                print(f"🔗 Definition links: {link_stats['resolved_calls']} call links, "
+                      f"{link_stats['aliased_imports']} import aliases.")
         except Exception as e:
             print(f"⚠️ Startup auto-ingest notice: {e}")
 
@@ -104,8 +109,11 @@ def ingest(req: IngestRequest):
         store = GraphStore()
         store.clear()
         stats = store.ingest(result)
+        link_stats = store.link_definitions()
         return {"nodes_created": stats["nodes_created"],
-                "edges_created": stats["edges_created"]}
+                "edges_created": stats["edges_created"],
+                "resolved_calls": link_stats["resolved_calls"],
+                "aliased_imports": link_stats["aliased_imports"]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

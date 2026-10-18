@@ -60,29 +60,67 @@ def get_graph_json(store: GraphStore, limit: int = 500) -> dict:
     return {"nodes": nodes, "edges": edges}
 
 
+def _safe(value: str) -> str:
+    """Strip quotes for safe Cypher string interpolation in diagnostic queries."""
+    return str(value).replace("'", "").replace('"', "")[:120]
+
+
 def get_path_visualization(store: GraphStore, source: str, target: str) -> dict:
-    """Visualize the shortest path between two entities."""
+    """Visualize the shortest path between two entities.
+
+    Distinguishes 'node not found' (with did-you-mean suggestions) from
+    'nodes exist but disconnected', and renders direction-aware arrows.
+    """
     try:
         results = store.find_shortest_path(source, target)
     except Exception as e:
         return {"path": [], "message": f"Query error: {str(e)}", "hops": 0, "nodes": [], "edges": []}
 
     if not results or not results[0] or not results[0][0]:
-        return {"path": [], "message": f"No path found between '{source}' and '{target}'", "hops": 0, "nodes": [], "edges": []}
+        # Diagnose why: entity missing vs. disconnected components
+        try:
+            src_rows = store.query(
+                f"MATCH (n) WHERE n.name = '{_safe(source)}' OR n.id = '{_safe(source)}' "
+                "RETURN count(n)")
+            tgt_rows = store.query(
+                f"MATCH (n) WHERE n.name = '{_safe(target)}' OR n.id = '{_safe(target)}' "
+                "RETURN count(n)")
+            src_found = bool(src_rows and src_rows[0][0])
+            tgt_found = bool(tgt_rows and tgt_rows[0][0])
+        except Exception:
+            src_found = tgt_found = True  # keep generic message on error
+
+        if not src_found:
+            sugg = store.suggest_entities(source)
+            hint = f" Did you mean: {', '.join(sugg)}?" if sugg else ""
+            return {"path": [], "message": f"No node named '{source}' in the graph.{hint}",
+                    "hops": 0, "nodes": [], "edges": []}
+        if not tgt_found:
+            sugg = store.suggest_entities(target)
+            hint = f" Did you mean: {', '.join(sugg)}?" if sugg else ""
+            return {"path": [], "message": f"No node named '{target}' in the graph.{hint}",
+                    "hops": 0, "nodes": [], "edges": []}
+        return {"path": [], "hops": 0, "nodes": [], "edges": [],
+                "message": (f"'{source}' and '{target}' both exist, but no connecting "
+                            "path was found — they may live in disconnected parts "
+                            "of the graph.")}
 
     path_nodes = results[0][0]
     path_edges = results[0][1]
+    directions = results[0][3] if len(results[0]) > 3 else ["fwd"] * len(path_edges)
 
     visualization = []
     for i, node_name in enumerate(path_nodes):
         visualization.append({"node": node_name, "step": i})
         if i < len(path_edges):
-            visualization.append({"edge": path_edges[i], "step": i})
+            visualization.append({"edge": path_edges[i], "step": i,
+                                  "direction": directions[i]})
 
-    # ASCII representation
+    # ASCII representation (direction-aware)
     ascii_path = f" {path_nodes[0]} "
     for i, edge_type in enumerate(path_edges):
-        ascii_path += f"-[{edge_type}]-> {path_nodes[i + 1]} "
+        arrow = f"-[{edge_type}]->" if directions[i] == "fwd" else f"<-[{edge_type}]-"
+        ascii_path += f"{arrow} {path_nodes[i + 1]} "
 
     return {
         "path": visualization,
@@ -90,6 +128,7 @@ def get_path_visualization(store: GraphStore, source: str, target: str) -> dict:
         "hops": len(path_edges),
         "nodes": path_nodes,
         "edges": path_edges,
+        "directions": directions,
     }
 
 

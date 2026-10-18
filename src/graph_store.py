@@ -189,43 +189,165 @@ class GraphStore:
         }
 
     def find_shortest_path(self, source_name: str, target_name: str) -> list:
-        """Find the shortest path between two nodes using native FalkorDB Cypher."""
-        cypher_fwd = """
-        MATCH (a), (b)
-        WHERE (a.name = $source OR a.id = $source) AND (b.name = $target OR b.id = $target)
-        WITH shortestPath((a)-[*..10]->(b)) AS path
-        WHERE path IS NOT NULL
-        RETURN [n IN nodes(path) | n.name] AS path_nodes,
-               [r IN relationships(path) | type(r)] AS path_edges,
-               length(path) AS path_length
-        LIMIT 1
+        """Find the shortest path between two nodes.
+
+        Tries native directed shortestPath first, then falls back to a Python
+        BFS over an undirected adjacency view — required because FalkorDB does
+        not support undirected shortestPath traversals.
+
+        Rows: [node_names, rel_types, length, directions] where each direction
+        is 'fwd' (edge follows path direction) or 'rev' (edge is reversed).
         """
+        for cypher, reverse in (
+            ("""MATCH (a), (b)
+            WHERE (a.name = $source OR a.id = $source) AND (b.name = $target OR b.id = $target)
+            WITH shortestPath((a)-[*..10]->(b)) AS path
+            WHERE path IS NOT NULL
+            RETURN [n IN nodes(path) | n.name] AS path_nodes,
+                   [r IN relationships(path) | type(r)] AS path_edges,
+                   length(path) AS path_length
+            LIMIT 1""", False),
+            ("""MATCH (a), (b)
+            WHERE (a.name = $source OR a.id = $source) AND (b.name = $target OR b.id = $target)
+            WITH shortestPath((b)-[*..10]->(a)) AS path
+            WHERE path IS NOT NULL
+            RETURN [n IN nodes(path) | n.name] AS path_nodes,
+                   [r IN relationships(path) | type(r)] AS path_edges,
+                   length(path) AS path_length
+            LIMIT 1""", True),
+        ):
+            try:
+                res = self.query(cypher, {"source": source_name, "target": target_name})
+                if res and len(res) > 0 and res[0][0]:
+                    nodes, rels = res[0][0], res[0][1]
+                    if reverse:
+                        nodes, rels = list(reversed(nodes)), list(reversed(rels))
+                    return [[nodes, rels, len(rels), ["fwd" if not reverse else "rev"] * len(rels)]]
+            except Exception:
+                continue
+
+        # ── Undirected BFS fallback (FalkorDB lacks undirected shortestPath) ──
         try:
-            res = self.query(cypher_fwd, {"source": source_name, "target": target_name})
-            if res and len(res) > 0 and res[0][0]:
-                return res
+            edges = self.query(
+                "MATCH (a)-[r]->(b) RETURN a.id, a.name, labels(a)[0], "
+                "type(r), b.id, b.name, labels(b)[0]")
+        except Exception:
+            return []
+        if not edges:
+            return []
+
+        from collections import defaultdict, deque
+        _pref = {"Function": 0, "Class": 0, "Method": 1, "Module": 1,
+                 "ExternalModule": 2, "Call": 3}
+        adj, names, prefs = defaultdict(list), {}, {}
+        for a_id, a_name, a_lbl, rel, b_id, b_name, b_lbl in edges:
+            names[a_id] = a_name or a_id
+            names[b_id] = b_name or b_id
+            prefs[a_id] = _pref.get(a_lbl, 2)
+            prefs[b_id] = _pref.get(b_lbl, 2)
+            adj[a_id].append((b_id, rel, True))
+            adj[b_id].append((a_id, rel, False))
+
+        sources = sorted([nid for nid in names if nid == source_name or names[nid] == source_name],
+                         key=lambda x: prefs.get(x, 2))
+        targets = {nid for nid in names if nid == target_name or names[nid] == target_name}
+        if not sources or not targets:
+            return []
+
+        parent = {s: None for s in sources}
+        q = deque(sources)
+        found = None
+        while q:
+            cur = q.popleft()
+            if cur in targets:
+                found = cur
+                break
+            for nxt, rel, fwd in adj[cur]:
+                if nxt not in parent:
+                    parent[nxt] = (cur, rel, fwd)
+                    q.append(nxt)
+        if found is None:
+            return []
+
+        node_ids, rel_types, directions = [], [], []
+        cur = found
+        while cur is not None:
+            node_ids.append(cur)
+            entry = parent[cur]
+            if entry is not None:
+                _prev, rel, fwd = entry
+                rel_types.append(rel)
+                directions.append("fwd" if fwd else "rev")
+            cur = entry[0] if entry else None
+        node_ids.reverse()
+        rel_types.reverse()
+        directions.reverse()
+        return [[[names.get(nid, nid) for nid in node_ids], rel_types,
+                  len(rel_types), directions]]
+
+    def link_definitions(self) -> dict:
+        """Idempotently link synthetic nodes to real definitions.
+
+        - Call -(RESOLVES_TO)-> unique Function/Method/Class with same name
+        - ExternalModule -(ALIAS_OF)-> internal Module (src.parser -> parser.py)
+
+        Safe to run repeatedly (MERGE-based). Returns link counts.
+        """
+        stats = {"resolved_calls": 0, "aliased_imports": 0}
+        try:
+            rows = self.query("""
+            MATCH (c:Call)
+            WITH c, c.name AS nm
+            MATCH (d) WHERE d.name = nm AND (d:Function OR d:Method OR d:Class)
+            WITH c, collect(DISTINCT d) AS defs
+            WHERE size(defs) = 1
+            WITH c, defs[0] AS d
+            MERGE (c)-[:RESOLVES_TO]->(d)
+            RETURN count(*) AS linked
+            """)
+            stats["resolved_calls"] = rows[0][0] if rows else 0
         except Exception:
             pass
 
-        cypher_rev = """
-        MATCH (a), (b)
-        WHERE (a.name = $source OR a.id = $source) AND (b.name = $target OR b.id = $target)
-        WITH shortestPath((b)-[*..10]->(a)) AS path
-        WHERE path IS NOT NULL
-        RETURN [n IN nodes(path) | n.name] AS path_nodes,
-               [r IN relationships(path) | type(r)] AS path_edges,
-               length(path) AS path_length
-        LIMIT 1
-        """
         try:
-            res_rev = self.query(cypher_rev, {"source": source_name, "target": target_name})
-            if res_rev and len(res_rev) > 0 and res_rev[0][0]:
-                row = res_rev[0]
-                return [[list(reversed(row[0])), list(reversed(row[1])), row[2]]]
+            modules = self.query("MATCH (m:Module) RETURN m.id, m.file")
+            externals = self.query(
+                "MATCH (e:ExternalModule) WHERE NOT (e)-[:ALIAS_OF]->() "
+                "RETURN e.id, e.name")
+            file_to_id = {row[1]: row[0] for row in modules if row[1]}
+            pairs = []
+            for eid, ename in externals:
+                if not ename:
+                    continue
+                candidates = [ename]
+                if "." in ename:
+                    candidates.append(ename.split(".", 1)[1])
+                for cand in candidates:
+                    mid = file_to_id.get(cand + ".py")
+                    if mid:
+                        pairs.append([eid, mid])
+                        break
+            if pairs:
+                self.query(
+                    "UNWIND $pairs AS p "
+                    "MATCH (a {id: p[0]}), (b {id: p[1]}) "
+                    "MERGE (a)-[:ALIAS_OF]->(b)",
+                    {"pairs": pairs})
+            stats["aliased_imports"] = len(pairs)
         except Exception:
             pass
+        return stats
 
-        return []
+    def suggest_entities(self, name: str, limit: int = 3) -> list:
+        """Find entities with similar names (did-you-mean helper)."""
+        safe = str(name).replace("'", "").replace('"', "")[:80]
+        try:
+            rows = self.query(
+                f"MATCH (n) WHERE toLower(n.name) CONTAINS toLower('{safe}') "
+                f"RETURN DISTINCT n.name LIMIT {int(limit)}")
+            return [r[0] for r in rows]
+        except Exception:
+            return []
 
     def pagerank(self, limit: int = 10) -> list:
         """Find the most important nodes via degree centrality."""

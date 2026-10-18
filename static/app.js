@@ -817,7 +817,12 @@ async function findPath() {
       let html = '<div class="graph-path-viz" style="margin:0">';
       d.nodes.forEach((n, i) => {
         html += `<span class="path-node" style="animation-delay:${i * .15}s">${escapeHtml(n)}</span>`;
-        if (i < d.edges.length) html += `<span class="path-edge">-[${escapeHtml(d.edges[i])}]→</span>`;
+        if (i < d.edges.length) {
+          const back = d.directions && d.directions[i] === 'rev';
+          html += back
+            ? `<span class="path-edge">←[${escapeHtml(d.edges[i])}]—</span>`
+            : `<span class="path-edge">-[${escapeHtml(d.edges[i])}]→</span>`;
+        }
       });
       html += '</div>';
       html += `\n<span style="color:var(--text-muted);font-size:.7rem">Hops: ${d.hops}</span>`;

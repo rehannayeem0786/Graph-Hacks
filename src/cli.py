@@ -40,9 +40,12 @@ def cmd_ingest(path: str):
     store = GraphStore()
     store.clear()
     stats = store.ingest(result)
+    link_stats = store.link_definitions()
     console.print(Panel(
         f"✅ Ingested into FalkorDB graph '{FALKORDB_GRAPH_NAME}'\n"
-        f"   Nodes: {stats['nodes_created']}, Edges: {stats['edges_created']}",
+        f"   Nodes: {stats['nodes_created']}, Edges: {stats['edges_created']}\n"
+        f"   🔗 Linked: {link_stats['resolved_calls']} call→definition, "
+        f"{link_stats['aliased_imports']} import→module",
         border_style="green",
     ))
 
